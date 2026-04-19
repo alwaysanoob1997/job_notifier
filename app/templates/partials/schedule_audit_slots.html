@@ -1,0 +1,19 @@
+{% if not rows %}
+<p class="muted">No run times on this snapshot.</p>
+{% else %}
+<ul class="audit-run-status-list" aria-label="Run status for this saved schedule">
+  {% for row in rows %}
+  <li class="audit-run-status-line">
+    <span class="audit-run-label">Run {{ loop.index }}</span>
+    <span class="muted">({{ row.slot_label|e }})</span>
+    <span class="audit-run-sep">:</span>
+    <span class="slot-status slot-status-{{ row.status }}">{{ status_labels[row.status]|e }}</span>
+    {% if row.run_id %}
+    <span class="muted">·</span> <a href="/runs/{{ row.run_id }}">Run #{{ row.run_id }}</a>
+    {% if row.run_trigger %}<span class="muted">({{ row.run_trigger|e }})</span>{% endif %}
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+<p class="muted small-print audit-run-meta">Day {{ day_label|e }} · {{ tz_label|e }} · filter #{{ filter_id }}</p>
+{% endif %}

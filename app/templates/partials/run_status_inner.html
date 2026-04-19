@@ -1,0 +1,9 @@
+<p><strong>Status:</strong> <span class="status status-{{ run.status }}">{{ run.status }}</span></p>
+<p><strong>Started:</strong> {{ run.started_at|format_dt }}{% if run.finished_at %} · <strong>Finished:</strong> {{ run.finished_at|format_dt }}{% endif %}</p>
+<p><strong>Returned:</strong> {{ run.jobs_returned }} · <strong>New:</strong> {{ run.jobs_new }} · <strong>Duplicates:</strong> {{ run.jobs_duplicate }}</p>
+{% if run.error_message %}
+<pre class="error">{{ run.error_message }}</pre>
+{% endif %}
+{% if run.status == 'running' %}
+<p class="muted">Still running… this panel refreshes automatically.</p>
+{% endif %}

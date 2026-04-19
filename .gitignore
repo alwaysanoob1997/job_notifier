@@ -1,0 +1,7 @@
+__pycache__
+tests
+.env
+.venv
+.pytest_cache
+.cursor
+pytest.ini

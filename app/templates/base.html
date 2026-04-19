@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}LinkedIn Jobs{% endblock %}</title>
+  <script>
+    (function () {
+      var k = "li-scraper-theme";
+      var t = null;
+      try { t = localStorage.getItem(k); } catch (e) {}
+      var m = (t === "light" || t === "dark")
+        ? t
+        : (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+      document.documentElement.setAttribute("data-theme", m);
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-left">
+      <button type="button" class="nav-menu-toggle" id="nav-menu-toggle" aria-expanded="false" aria-controls="nav-drawer" aria-label="Open menu">
+        <span class="nav-menu-icon" aria-hidden="true"></span>
+      </button>
+      <a href="/" class="brand">LinkedIn Jobs Scraper</a>
+    </div>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Toggle color theme">Theme</button>
+    <div class="nav-drawer" id="nav-drawer" hidden>
+      <nav class="nav-drawer-inner" aria-label="Site">
+        <a href="/runs">Past runs</a>
+        <a href="/schedules">Schedules</a>
+        <a href="/settings/advanced">Browser paths</a>
+      </nav>
+    </div>
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="site-footer">
+    <p>Public listings only. Respect LinkedIn’s <a href="https://www.linkedin.com/legal/user-agreement" rel="noopener">Terms of Use</a> and applicable law. Scheduling runs only while this server process is running; use cron/systemd/launchd with <code>python -m app</code> for headless repeats.</p>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,32 @@
+name: ci
+on: [push, workflow_dispatch]
+
+jobs:
+  job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v2
+
+      - name: Install Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Test
+        if: ${{ env.TEST != 'skip' }}
+        run: tests/run_tests.sh
+        shell: bash
+
+      - name: Build distribution
+        run: python setup.py install_egg_info sdist bdist_wheel
+
+      - name: Deploy to PyPi
+        if: github.ref == 'refs/heads/master'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_DEPLOY_TOKEN }}

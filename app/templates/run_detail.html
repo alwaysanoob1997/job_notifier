@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Run {{ run.id }} · LinkedIn Jobs{% endblock %}
+{% block content %}
+<p><a href="/runs">&larr; Past runs</a></p>
+<h1>Run {{ run.id }}</h1>
+<p class="muted">{{ run.job_title }} — {{ run.location }} · {{ run.trigger }}</p>
+
+<div
+  class="run-status-card"
+  id="run-status"
+  hx-get="/partials/run-status/{{ run.id }}"
+  hx-trigger="load, every 2s"
+  hx-swap="innerHTML">
+  {% include "partials/run_status_inner.html" %}
+</div>
+
+<section class="card">
+  <h2>New jobs this run</h2>
+  <p class="muted">Jobs whose <code>job_id</code> was not in the database before this run.</p>
+  {% if new_jobs %}
+  <div class="table-wrap job-grid-wrap" id="run-jobs-table-wrap">
+    <div class="table-toolbar job-table-toolbar">
+      <button type="button" class="btn-secondary" id="job-meta-toggle" aria-expanded="false" aria-controls="run-jobs-table-wrap">Show row meta</button>
+      <button type="button" class="btn-secondary" data-tsv-export>Export TSV</button>
+    </div>
+    <div class="table-scroll">
+      <table class="data-table job-results-grid" data-tsv-filename="run-{{ run.id }}-new-jobs">
+        <thead>
+          <tr>
+            <th>Listed</th>
+            <th>Title</th>
+            <th>Company</th>
+            <th>Place</th>
+            <th>Link</th>
+            <th>Salary</th>
+            <th>Score</th>
+            <th class="job-reasoning-col">Reasoning</th>
+            <th class="job-meta-panel">Meta</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for j in new_jobs %}
+          {% set score_row = scores_by_job_id.get(j.job_id) %}
+          <tr>
+            <td>{% if j.date %}{{ j.date }}{% elif j.date_text %}{{ j.date_text }}{% else %}—{% endif %}</td>
+            <td>{{ j.title }}</td>
+            <td>{{ j.company }}</td>
+            <td>{{ j.place }}</td>
+            <td>{% if j.link %}<a href="{{ j.link }}" rel="noopener" target="_blank">Listing</a>{% endif %}</td>
+            <td>{% if j.salary %}{{ j.salary }}{% else %}—{% endif %}</td>
+            <td>{% if score_row %}{{ score_row.score }}{% else %}—{% endif %}</td>
+            <td class="job-reasoning-col">{% if score_row %}<span class="job-reasoning-text">{{ score_row.reasoning }}</span>{% else %}—{% endif %}</td>
+            <td class="job-meta-panel">
+              <div class="job-meta-inner">
+                <div><span class="muted">Job ID</span> {{ j.job_id }}</div>
+                <div><span class="muted">Record created</span> {{ j.created_at|format_dt }}</div>
+                <div><span class="muted">Query</span> {{ j.query }}</div>
+                <div><span class="muted">Location</span> {{ j.location }}</div>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <p class="muted">No new job rows for this run (duplicates are not re-inserted).</p>
+  {% endif %}
+</section>
+{% endblock %}

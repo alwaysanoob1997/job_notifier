@@ -1,0 +1,251 @@
+# linkedin-jobs-scraper — guest (public) job scraping
+
+Scrape **public** LinkedIn job listings **without** signing in. The library uses **`GuestStrategy`** only: the same data a signed-out visitor can see (guest HTTP first, then headless Chrome if needed).
+
+**Disclaimer:** For personal or educational use only. Data belongs to LinkedIn; respect their Terms of Use and rate limits. The authors are not responsible for misuse.
+
+## Table of contents
+
+- [How guest scraping works](#how-guest-scraping-works)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Pandas DataFrame example](#pandas-dataframe-example)
+- [Scraper options](#scraper-options)
+- [Queries, options, and filters](#queries-options-and-filters)
+- [Events and job fields](#events-and-job-fields)
+- [Rate limiting and failures](#rate-limiting-and-failures)
+- [Company and industry filters](#company-and-industry-filters)
+- [Tests](#tests)
+- [Logging](#logging)
+- [License](#license)
+
+## How guest scraping works
+
+1. **Guest HTTP (preferred):** Requests go to LinkedIn’s public guest listing endpoint (`seeMoreJobPostings`), built from the same query parameters as `https://www.linkedin.com/jobs/search`. Each job’s description (and optional off-site apply URL) is loaded from the **public job view** page. This path uses Python’s standard library only—**no browser** while it succeeds.
+2. **Selenium fallback:** If the guest API returns no cards, looks like a login wall, or errors, the scraper starts **headless Chrome**, opens **`jobs/search`**, and walks the page. That path needs **Chrome/Chromedriver** and is more sensitive to layout and IP blocks.
+
+## Requirements
+
+- **Python** ≥ 3.7  
+- **Chrome + Chromedriver** — required when guest HTTP does not yield jobs and Selenium fallback runs (recommended to have them available)
+
+## Installation
+
+```shell
+pip install linkedin-jobs-scraper
+```
+
+From a clone:
+
+```shell
+pip install .
+```
+
+## Usage
+
+```python
+import logging
+from linkedin_jobs_scraper import LinkedinScraper
+from linkedin_jobs_scraper.events import Events, EventData
+from linkedin_jobs_scraper.query import Query, QueryOptions, QueryFilters
+from linkedin_jobs_scraper.filters import RelevanceFilters, TimeFilters, TypeFilters
+
+logging.basicConfig(level=logging.INFO)
+
+
+def on_data(data: EventData):
+    print(data.title, data.company, data.place, data.date, data.date_text, data.link)
+
+
+def on_error(err):
+    print("ERROR:", err)
+
+
+def on_end():
+    print("Done.")
+
+
+scraper = LinkedinScraper(headless=True, max_workers=1, slow_mo=1.3)
+scraper.on(Events.DATA, on_data)
+scraper.on(Events.ERROR, on_error)
+scraper.on(Events.END, on_end)
+
+queries = [
+    Query(
+        query="Python developer",
+        options=QueryOptions(
+            locations=["United States"],
+            limit=10,
+            filters=QueryFilters(
+                relevance=RelevanceFilters.RECENT,
+                time=TimeFilters.WEEK,
+                type=[TypeFilters.FULL_TIME],
+            ),
+        ),
+    ),
+]
+
+scraper.run(queries)
+```
+
+### Pandas DataFrame example
+
+Install pandas separately: `pip install pandas`.
+
+`EventData.place` is the location line shown on the job card / posting (what LinkedIn exposes on the public listing and detail flow). `EventData.salary` is filled when the job page includes pay in **JSON-LD** (`baseSalary` / `estimatedSalary` on `JobPosting`); many listings omit it—then `salary` is an empty string (pay may still appear only inside `description` as prose).
+
+```python
+import logging
+from typing import List
+
+import pandas as pd
+
+from linkedin_jobs_scraper import LinkedinScraper
+from linkedin_jobs_scraper.events import Events, EventData
+from linkedin_jobs_scraper.query import Query, QueryOptions, QueryFilters
+from linkedin_jobs_scraper.filters import RelevanceFilters, TimeFilters, TypeFilters
+
+logging.basicConfig(level=logging.INFO)
+
+
+def scrape_jobs_to_dataframe(queries: List[Query]) -> pd.DataFrame:
+    rows: List[dict] = []
+
+    def on_data(data: EventData) -> None:
+        rows.append(
+            {
+                "title": data.title,
+                "location_on_post": data.place,
+                "listed_at": data.date,
+                "listed_at_text": data.date_text,
+                "description": data.description,
+                "salary_structured": data.salary or None,
+                "company": data.company,
+                "link": data.link,
+                "job_id": data.job_id,
+            }
+        )
+
+    scraper = LinkedinScraper(headless=True, max_workers=1, slow_mo=1.3)
+    scraper.on(Events.DATA, on_data)
+    scraper.on(Events.ERROR, lambda e: logging.warning("scraper error: %s", e))
+    scraper.run(queries)
+    return pd.DataFrame(rows)
+
+
+df = scrape_jobs_to_dataframe(
+    [
+        Query(
+            query="Python developer",
+            options=QueryOptions(
+                locations=["United States"],
+                limit=10,
+                filters=QueryFilters(
+                    relevance=RelevanceFilters.RECENT,
+                    time=TimeFilters.WEEK,
+                    type=[TypeFilters.FULL_TIME],
+                ),
+            ),
+        ),
+    ]
+)
+print(df.head())
+```
+
+**Default global options** when you call `run(queries)` without a second argument: `locations=['Worldwide']`, `limit=25`. Override by passing `QueryOptions` as the second argument to `run`, or set options on each `Query`.
+
+```python
+scraper.run(
+    [Query(query="Data engineer", options=QueryOptions())],
+    QueryOptions(locations=["Germany", "Netherlands"], limit=5),
+)
+```
+
+**Keywords + description + apply link** (slower: extra HTTP fetch per job when `apply_link=True`):
+
+```python
+Query(
+    query="Site reliability engineer",
+    options=QueryOptions(
+        locations=["Remote"],
+        limit=3,
+        apply_link=True,
+        skip_promoted_jobs=True,
+        page_offset=0,
+    ),
+)
+```
+
+**Multiple queries in parallel** (`max_workers` > 1 increases load on LinkedIn—increase `slow_mo` accordingly):
+
+```python
+scraper = LinkedinScraper(max_workers=2, slow_mo=1.5)
+scraper.run(
+    [
+        Query("backend", QueryOptions(locations=["France"], limit=5)),
+        Query("frontend", QueryOptions(locations=["France"], limit=5)),
+    ]
+)
+```
+
+## Scraper options
+
+`LinkedinScraper` constructor (used for Selenium fallback timing, concurrency, and Chrome options):
+
+| Parameter | Role |
+|-----------|------|
+| `chrome_executable_path` | Path to `chromedriver` (Selenium fallback) |
+| `chrome_binary_location` | Path to Chrome/Chromium binary |
+| `chrome_options` | Custom `selenium` `Options`; if set, `headless` is ignored |
+| `headless` | Headless Chrome when building default options |
+| `max_workers` | Thread pool size (one thread per query pipeline) |
+| `slow_mo` | Delay (seconds) between guest listing pages and between Selenium steps |
+| `page_load_timeout` | Selenium page load timeout (seconds) |
+
+## Queries, options, and filters
+
+- **`Query(query='', options=QueryOptions())`** — `query` is the keyword string; empty query is allowed with filters/company URL.
+- **`QueryOptions`:** `limit`, `locations` (list or single string), `filters`, `apply_link`, `skip_promoted_jobs`, `page_offset` (skips pages in units of 25).
+
+**`QueryFilters`** (all optional): `company_jobs_url`, `relevance`, `time`, `type`, `experience`, `base_salary`, `industry`, `on_site_or_remote` (merged into the search URL as `f_WT`; LinkedIn’s guest listing may not always honor every combination—verify results for your query).
+
+Filter enums live in `linkedin_jobs_scraper.filters` (e.g. `RelevanceFilters`, `TimeFilters`, `TypeFilters`, `ExperienceLevelFilters`, `IndustryFilters`, `SalaryBaseFilters`, `OnSiteOrRemoteFilters`).
+
+## Events and job fields
+
+Register callbacks with `scraper.on(Events.DATA, fn)`, `Events.ERROR`, `Events.END`, `Events.METRICS`.
+
+`EventData` includes: `query`, `location`, `job_id`, `job_index`, `link`, `apply_link`, `title`, `company`, `company_link`, `company_img_link`, `place`, `description`, `description_html`, `date`, `date_text`, `insights`, `skills`, `salary` (from JSON-LD on the job page when present).
+
+Listings are built from guest HTML/API: **`company_link`**, **`company_img_link`**, **`date_text`**, **`insights`**, and **`skills`** are usually **empty**. Prefer `title`, `company`, `place`, `date`, `link`, `description`, `apply_link`.
+
+## Rate limiting and failures
+
+- Prefer **`slow_mo` ≥ ~1.3** and **`max_workers=1`** if you see throttling or empty results.
+- **429 / blocks:** Reduce concurrency, increase `slow_mo`, try another network; guest HTTP may return a login-shaped page—then Selenium runs or an `Events.ERROR` is emitted.
+- If guest HTTP returns **no jobs** and **no** Chrome/driver is available, you get an error explaining that Selenium fallback could not run.
+
+## Company and industry filters
+
+**Company filter:** Paste a LinkedIn **company jobs search** URL that contains `f_C=…` into `QueryFilters(company_jobs_url='...')`. Finding that URL: open the company page → Jobs → “See all jobs” → copy the URL from the address bar (same idea as the upstream project screenshots in `media/`).
+
+**Industry filter:** Perform a search in the browser with industry filters, then copy numeric codes from the URL after `f_I=`. Missing industries can be added to `IndustryFilters` in `linkedin_jobs_scraper/filters/filters.py`.
+
+## Tests
+
+- **Unit / fast:** `pytest -m "not integration"` (default in Docker CI via [`tests/Dockerfile`](tests/Dockerfile)).
+- **Integration:** `pytest tests/test_.py` — real Chrome + LinkedIn; marked `integration` in [`pytest.ini`](pytest.ini).
+
+## Logging
+
+Logger name: **`li:scraper`**. Set level with env var **`LOG_LEVEL`** (`DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`) or in code:
+
+```python
+import logging
+logging.getLogger("li:scraper").setLevel(logging.DEBUG)
+```
+
+## License
+
+[MIT License](http://en.wikipedia.org/wiki/MIT_License)

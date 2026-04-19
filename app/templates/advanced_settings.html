@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Browser paths · LinkedIn Jobs{% endblock %}
+{% block content %}
+<p><a href="/">&larr; Home</a></p>
+<h1>Browser paths</h1>
+<p class="muted">Optional Chrome / Chromium paths used for all filters on this machine.</p>
+
+<form method="post" action="/settings/advanced" class="card">
+  <label>ChromeDriver path <input name="chrome_executable_path" type="text" value="{{ (settings.chrome_executable_path or '') if settings else '' }}" placeholder="optional" /></label>
+  <label>Chrome binary path <input name="chrome_binary_location" type="text" value="{{ (settings.chrome_binary_location or '') if settings else '' }}" placeholder="optional" /></label>
+  <button type="submit" class="btn-primary">Save</button>
+</form>
+{% endblock %}

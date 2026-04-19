@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Schedules · LinkedIn Jobs{% endblock %}
+{% block content %}
+<p><a href="/">&larr; Home</a></p>
+<h1>Schedule history</h1>
+
+<h2 class="schedule-audit-heading">Saved schedule snapshots</h2>
+<p class="muted">Each filter keeps a <strong>single current snapshot</strong>: whenever you save new daily run times on a filter, the previous row for that filter is removed and replaced. <strong>Click a row</strong> (not Delete) to load <strong>Run 1</strong>, <strong>Run 2</strong>, … status for that snapshot’s local times — default day is the log date in the snapshot timezone. The <strong>Timezone</strong> column is the zone the app used when that row was saved (historical), not necessarily the zone in use after you change <code>.env</code>.</p>
+
+{% if audits %}
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table class="data-table data-table-audit-schedules">
+      <thead>
+        <tr>
+          <th>Logged</th>
+          <th>Schedule ID</th>
+          <th>Filter</th>
+          <th>Runs</th>
+          <th>Local times</th>
+          <th>Timezone <span class="muted small">(at save time)</span></th>
+          <th>Job title</th>
+          <th>Location</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in audits %}
+        <tr
+          class="audit-row-master"
+          tabindex="0"
+          role="button"
+          aria-label="Load run statuses for schedule log {{ a.schedule_id }}"
+          hx-get="{{ request.url_for('schedule_audit_slots', audit_id=a.id) }}"
+          hx-target="#audit-slot-{{ a.id }}"
+          hx-swap="innerHTML"
+          hx-trigger="click"
+        >
+          <td>{{ a.logged_at|format_dt }}</td>
+          <td><code>{{ a.schedule_id }}</code></td>
+          <td>#{{ a.filter_id }}{% if a.filter_name %} — {{ a.filter_name|e }}{% endif %}</td>
+          <td>{{ a.runs_count }} <span class="muted">(runs_per_day {{ a.runs_per_day }})</span></td>
+          <td><code>{{ a.schedule_times_json|e }}</code></td>
+          <td>{{ a.timezone_name|e }}</td>
+          <td>{{ a.job_title|e }}</td>
+          <td>{{ a.location|e }}</td>
+          <td class="table-actions audit-row-actions" onclick="event.stopPropagation()">
+            <form method="post" action="/schedules/audit/{{ a.id }}/delete" class="inline-form" onsubmit="return confirm('Remove this schedule log entry? This does not change the filter’s current saved times.');">
+              <button type="submit" class="btn-secondary btn-compact">Delete</button>
+            </form>
+          </td>
+        </tr>
+        <tr class="audit-row-slot-detail" aria-live="polite">
+          <td colspan="9" class="audit-slot-td">
+            <div id="audit-slot-{{ a.id }}" class="audit-slot-panel">
+              <p class="muted audit-slot-hint">Click the row above for Run 1 / Run 2 status…</p>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<p class="muted">No schedule changes recorded yet. Save a filter’s scheduled runs to create an entry.</p>
+{% endif %}
+{% endblock %}
