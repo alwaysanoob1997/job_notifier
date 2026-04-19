@@ -18,13 +18,13 @@ from sqlalchemy.orm import Session
 from app.config import (
     lms_auto_shutdown_enabled,
     lms_auto_start_server_enabled,
-    lms_cli_executable,
     lms_server_bind_address,
     lms_server_start_port,
     lms_server_start_wait_seconds,
     lmstudio_base_url,
     lmstudio_model,
 )
+from app.lmstudio_cli import lms_executable_for_subprocess
 from app.db import session_scope
 from app.default_system_prompt import DEFAULT_SYSTEM_PROMPT
 from app.llm_score_db import JobLlmScore, session_scope_llm
@@ -212,7 +212,7 @@ def _upsert_score(session: Session, job_id: str, score: int, reasoning: str) -> 
 
 
 def _run_lms(args: list[str]) -> subprocess.CompletedProcess[str]:
-    exe = lms_cli_executable()
+    exe = lms_executable_for_subprocess()
     cmd = [exe, *args]
     return subprocess.run(
         cmd,
@@ -227,7 +227,7 @@ def start_lmstudio_server_for_scoring() -> None:
     """``lms server start --bind …`` so WSL/LAN can reach the HTTP API (optional via env)."""
     if not lms_auto_start_server_enabled():
         return
-    exe = lms_cli_executable()
+    exe = lms_executable_for_subprocess()
     bind = lms_server_bind_address()
     cmd = [exe, "server", "start", "--bind", bind]
     port = lms_server_start_port()

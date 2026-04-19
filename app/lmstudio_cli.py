@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from app.config import lms_cli_executable
@@ -13,6 +15,26 @@ from app.config import lms_cli_executable
 logger = logging.getLogger(__name__)
 
 _LMS_LS_TIMEOUT_SEC = 20.0
+
+
+def _darwin_path_for_which() -> str | None:
+    """PATH augmented with common CLI locations.
+
+    Finder-launched apps on macOS inherit a minimal PATH from launchd (not the user's shell
+    profile), so tools installed under Homebrew or similar are often invisible to ``which``.
+    """
+    if sys.platform != "darwin":
+        return None
+    home = Path.home()
+    extra = [
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+        str(home / "bin"),
+        str(home / ".local" / "bin"),
+    ]
+    existing = os.environ.get("PATH", "")
+    merged = ":".join([*extra, existing] if existing else extra)
+    return merged
 
 
 def resolved_lms_path() -> str | None:
@@ -23,8 +45,14 @@ def resolved_lms_path() -> str | None:
     p = Path(exe)
     if p.is_file():
         return str(p.resolve())
-    w = shutil.which(exe)
+    path = _darwin_path_for_which()
+    w = shutil.which(exe, path=path) if path else shutil.which(exe)
     return w
+
+
+def lms_executable_for_subprocess() -> str:
+    """Executable string for ``subprocess`` (prefer absolute path so macOS GUI apps find ``lms``)."""
+    return resolved_lms_path() or lms_cli_executable()
 
 
 def lms_cli_available() -> bool:
