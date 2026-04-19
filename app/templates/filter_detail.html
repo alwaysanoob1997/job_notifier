@@ -3,7 +3,7 @@
 {% block content %}
 <div class="filter-detail-header">
   <div class="filter-detail-header-main">
-    <p class="filter-detail-back"><a href="/">&larr; All filters</a></p>
+    <p class="filter-detail-back"><a class="btn-secondary" href="/">&larr; All filters</a></p>
     <h1 class="filter-detail-title">{{ (filter.name or filter.job_title or 'Untitled filter')|e }}</h1>
   </div>
   <a class="filter-card-delete filter-detail-delete" href="{{ url_for('filter_delete_confirm', filter_id=filter.id) }}" aria-label="Delete filter">

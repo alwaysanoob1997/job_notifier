@@ -9,7 +9,7 @@
     <span class="audit-run-sep">:</span>
     <span class="slot-status slot-status-{{ row.status }}">{{ status_labels[row.status]|e }}</span>
     {% if row.run_id %}
-    <span class="muted">·</span> <a href="/runs/{{ row.run_id }}">Run #{{ row.run_id }}</a>
+    <span class="muted">·</span> <a class="btn-secondary btn-compact" href="/runs/{{ row.run_id }}">Run #{{ row.run_id }}</a>
     {% if row.run_trigger %}<span class="muted">({{ row.run_trigger|e }})</span>{% endif %}
     {% endif %}
   </li>

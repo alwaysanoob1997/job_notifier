@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Past runs · LinkedIn Jobs{% endblock %}
 {% block content %}
-<p><a href="/">&larr; Home</a></p>
+<p><a class="btn-secondary" href="/">&larr; Home</a></p>
 <h1>Past runs</h1>
 
 {% if blocked == "running" %}
@@ -41,7 +41,7 @@
           <td>{{ r.jobs_returned }}</td>
           <td>{{ r.jobs_new }}</td>
           <td>{{ r.jobs_duplicate }}</td>
-          <td><a href="/runs/{{ r.id }}">Open</a></td>
+          <td><a class="btn-secondary btn-compact" href="/runs/{{ r.id }}">Open</a></td>
           <td class="col-run-actions" data-tsv-skip>
             <form method="post" action="{{ url_for('run_delete', run_id=r.id) }}" class="run-delete-form">
               <button

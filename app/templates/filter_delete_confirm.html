@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Delete filter · LinkedIn Jobs{% endblock %}
 {% block content %}
-<p><a href="{{ url_for('filter_detail', filter_id=ctx.filter.id) }}">&larr; Back to filter</a></p>
+<p><a class="btn-secondary" href="{{ url_for('filter_detail', filter_id=ctx.filter.id) }}">&larr; Back to filter</a></p>
 <h1>Delete this filter?</h1>
 <p class="muted">{{ (ctx.filter.name or ctx.filter.job_title or 'Untitled filter')|e }}</p>
 
@@ -12,10 +12,10 @@
 <ul class="slots">
   <li>Removes <strong>{{ ctx.daily_slot_count }}</strong> recurring scheduler job(s) (local daily run times) for this filter.</li>
   {% if ctx.schedule_audit_count > 0 %}
-  <li>Deletes <strong>{{ ctx.schedule_audit_count }}</strong> schedule log entr{{ 'y' if ctx.schedule_audit_count == 1 else 'ies' }} on the <a href="/schedules">Schedules</a> page that reference this filter.</li>
+  <li>Deletes <strong>{{ ctx.schedule_audit_count }}</strong> schedule log entr{{ 'y' if ctx.schedule_audit_count == 1 else 'ies' }} on the <a class="btn-secondary btn-compact" href="/schedules">Schedules</a> page that reference this filter.</li>
   {% endif %}
   {% if ctx.scrape_run_count > 0 %}
-  <li>Leaves <strong>{{ ctx.scrape_run_count }}</strong> past scrape run(s) in <a href="/runs">Past runs</a>, but they will no longer be linked to this filter.</li>
+  <li>Leaves <strong>{{ ctx.scrape_run_count }}</strong> past scrape run(s) in <a class="btn-secondary btn-compact" href="/runs">Past runs</a>, but they will no longer be linked to this filter.</li>
   {% endif %}
 </ul>
 

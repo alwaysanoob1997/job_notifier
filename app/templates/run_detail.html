@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Run {{ run.id }} · LinkedIn Jobs{% endblock %}
 {% block content %}
-<p><a href="/runs">&larr; Past runs</a></p>
+<p><a class="btn-secondary" href="/runs">&larr; Past runs</a></p>
 <h1>Run {{ run.id }}</h1>
 <p class="muted">{{ run.job_title }} — {{ run.location }} · {{ run.trigger }}</p>
 
@@ -66,7 +66,7 @@
             <td>{{ j.title }}</td>
             <td>{{ j.company }}</td>
             <td>{{ j.place }}</td>
-            <td>{% if j.link %}<a href="{{ j.link }}" rel="noopener" target="_blank">Listing</a>{% endif %}</td>
+            <td>{% if j.link %}<a class="btn-secondary btn-compact" href="{{ j.link }}" rel="noopener" target="_blank">Listing</a>{% endif %}</td>
             <td>{% if j.salary %}{{ j.salary }}{% else %}—{% endif %}</td>
             <td>{% if score_row %}{{ score_row.score }}{% else %}—{% endif %}</td>
             <td class="job-reasoning-col">{% if score_row %}<span class="job-reasoning-text">{{ score_row.reasoning }}</span>{% else %}—{% endif %}</td>
