@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.config import scrape_job_limit
 from app.db import session_scope
 from app.models import AppSettings, Job, JobFilter, ScrapeRun
+from app.services.job_match_scoring import start_score_jobs_for_run_background
 
 logger = logging.getLogger(__name__)
 
@@ -201,16 +202,11 @@ def run_scrape_sync(run_id: int) -> None:
             else:
                 run.error_message = None
 
-        def _score_worker(rid: int = run_id) -> None:
-            from app.services.job_match_scoring import score_jobs_for_run
-
-            score_jobs_for_run(rid)
-
-        threading.Thread(
-            target=_score_worker,
-            name=f"llm-score-{run_id}",
-            daemon=True,
-        ).start()
+        if not start_score_jobs_for_run_background(run_id):
+            logger.warning(
+                "LLM scoring not started after scrape run_id=%s (already in progress)",
+                run_id,
+            )
     except Exception as e:
         logger.exception("scrape failed")
         with session_scope() as session:

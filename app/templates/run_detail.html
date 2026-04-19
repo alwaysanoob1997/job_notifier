@@ -5,6 +5,16 @@
 <h1>Run {{ run.id }}</h1>
 <p class="muted">{{ run.job_title }} — {{ run.location }} · {{ run.trigger }}</p>
 
+{% if blocked == "rescore_running" %}
+<p class="error">This run is still in progress. Wait until it finishes, then try regenerating LLM scores.</p>
+{% endif %}
+{% if blocked == "rescore_busy" %}
+<p class="error">Requirement comparison is already running for this run. Wait until it completes.</p>
+{% endif %}
+{% if rescored == "1" %}
+<p class="muted" role="status">Regenerating LLM scores and reasoning in the background. The progress bar below updates automatically; refresh this page when it finishes to see new scores in the table.</p>
+{% endif %}
+
 <div
   class="run-status-card"
   id="run-status"
@@ -20,6 +30,16 @@
   {% if new_jobs %}
   <div class="table-wrap job-grid-wrap" id="run-jobs-table-wrap">
     <div class="table-toolbar job-table-toolbar">
+      <form method="post" action="{{ url_for('run_rescore', run_id=run.id) }}" class="run-rescore-form">
+        <button
+          type="submit"
+          class="btn-secondary"
+          {% if run.status == "running" %}disabled aria-disabled="true"{% endif %}
+          title="{% if run.status == 'running' %}Cannot regenerate while the scrape is still running{% else %}Re-run the LLM for all new jobs in this run{% endif %}"
+          onclick="return confirm('Re-run the LLM for every new job in this run? This overwrites existing scores and reasoning in the database for those listings. Scoring uses your current ideal job requirements (save changes on the home page first if you want a new rubric). An email may be sent if any score meets your notify threshold.');">
+          Regenerate LLM scores &amp; reasoning
+        </button>
+      </form>
       <button type="button" class="btn-secondary" id="job-meta-toggle" aria-expanded="false" aria-controls="run-jobs-table-wrap">Show row meta</button>
       <button type="button" class="btn-secondary" data-tsv-export>Export TSV</button>
     </div>

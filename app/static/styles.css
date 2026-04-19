@@ -938,6 +938,130 @@ button.run-table-delete:disabled {
   margin-bottom: 1rem;
 }
 
+.schedule-primary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.schedule-active-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-top: 1rem;
+}
+
+.schedule-active-table-wrap {
+  flex: 1 1 12rem;
+  min-width: 0;
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--card-border));
+  background: color-mix(in srgb, var(--accent) 8%, var(--card));
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+table.data-table.schedule-active-table {
+  width: 100%;
+  margin: 0;
+  max-width: none;
+  min-width: 0;
+}
+
+.schedule-active-table caption {
+  caption-side: top;
+  text-align: left;
+  padding: 0.65rem 0.85rem 0.45rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text);
+  border-bottom: 1px solid var(--card-border);
+  background: color-mix(in srgb, var(--accent) 5%, var(--card));
+}
+
+.schedule-active-table thead th {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.schedule-active-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+/* Must beat global `button[type="submit"]` / `.btn` rules (accent pill) so icon SVGs stay visible */
+button.schedule-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  padding: 0;
+  margin: 0;
+  gap: 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+  background: color-mix(in srgb, var(--text) 5%, var(--card));
+  color: var(--muted);
+  font-size: inherit;
+  font-weight: 500;
+  line-height: 1;
+  box-shadow: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: color var(--transition), background var(--transition), border-color var(--transition);
+}
+
+button.schedule-icon-btn:hover {
+  color: var(--text);
+  border-color: var(--card-border);
+  transform: none;
+  box-shadow: none;
+  filter: none;
+}
+
+button.schedule-icon-btn:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+button.schedule-icon-btn:active {
+  transform: none;
+}
+
+button.schedule-icon-btn svg {
+  display: block;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+
+button.schedule-icon-btn--edit:hover {
+  color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent) 14%, var(--card));
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--card-border));
+}
+
+button.schedule-icon-btn--delete:hover {
+  color: var(--status-err);
+  background: color-mix(in srgb, var(--status-err) 14%, var(--card));
+  border-color: color-mix(in srgb, var(--status-err) 35%, var(--card-border));
+}
+
+.schedule-delete-form-hidden {
+  display: none;
+}
+
 .schedule-editor[hidden] {
   display: none !important;
 }
@@ -1131,6 +1255,10 @@ button.run-table-delete:disabled {
   flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
+}
+
+.job-table-toolbar .run-rescore-form {
+  display: contents;
 }
 
 .schedule-day-panel {

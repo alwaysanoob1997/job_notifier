@@ -3,7 +3,9 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
+import queue
 import subprocess
+import threading
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -31,13 +33,30 @@ from app.services.smtp_notify import send_plaintext_email
 
 logger = logging.getLogger(__name__)
 
+_run_score_locks: dict[int, threading.Lock] = {}
+_run_score_locks_mutex = threading.Lock()
+
+
+def _lock_for_run(run_id: int) -> threading.Lock:
+    with _run_score_locks_mutex:
+        if run_id not in _run_score_locks:
+            _run_score_locks[run_id] = threading.Lock()
+        return _run_score_locks[run_id]
+
+
 _MAX_DESCRIPTION_CHARS = 12_000
 _MAX_HTML_SNIPPET = 400
 
-_SYSTEM_PROMPT = """You are an impartial assistant that compares job postings to a user's stated ideal job requirements.
-You must respond with a single JSON object only, matching the requested schema exactly.
-The score must be an integer from 0 to 100 inclusive: 100 means an excellent match, 0 means no meaningful match.
-Reasoning should be very concise (2-3 sentences) and cite specific overlaps or gaps versus the requirements."""
+_SYSTEM_PROMPT = """You compare job listings to the user's ideal job requirements.
+Reply with one JSON object only, matching the schema exactly.
+Score is an integer 0–100.
+
+Scoring rules (strict):
+- Job title and implied role matter far more than company, location, salary, perks, or generic skill overlap.
+- First decide if the listing is the same professional domain / role family as what the user is seeking (from the ideal text). If it is not the same domain, score must be 0. Do not inflate score from tangential overlap.
+- Only when the domain matches may you assign a non-zero score; within that case, title/role alignment should drive almost all of the score, with other factors as small tie-breakers only.
+
+Reasoning must be very short: a few terse lines only (no paragraphs, no long explanations). Each line should be a quick note (e.g. domain match yes/no, title fit)."""
 
 _USER_TEMPLATE = """## User ideal job requirements
 
@@ -47,7 +66,8 @@ _USER_TEMPLATE = """## User ideal job requirements
 
 {job_blob}
 
-Respond with JSON containing "score" (0-100 integer) and "reasoning" (string) only."""
+Return JSON with "score" (0–100) and "reasoning" (string).
+Reasoning: only brief separate lines, each one short."""
 
 
 @dataclass
@@ -101,7 +121,7 @@ def _match_response_format() -> dict[str, Any]:
                 "type": "object",
                 "properties": {
                     "score": {"type": "integer", "minimum": 0, "maximum": 100},
-                    "reasoning": {"type": "string"},
+                    "reasoning": {"type": "string", "maxLength": 450},
                 },
                 "required": ["score", "reasoning"],
                 "additionalProperties": False,
@@ -311,7 +331,7 @@ def _persist_llm_compare_done(run_id: int, done: int) -> None:
             run_row.llm_compare_done = done
 
 
-def score_jobs_for_run(run_id: int) -> None:
+def _score_jobs_for_run_impl(run_id: int) -> None:
     """Score all jobs first seen in this run; optional LM Studio teardown after HTTP inference.
 
     Teardown (unload + server stop) runs only after at least one **successful** chat completion,
@@ -422,3 +442,31 @@ def score_jobs_for_run(run_id: int) -> None:
             shutdown_lmstudio_after_inference()
         except Exception as e:
             logger.warning("LM Studio shutdown step failed: %s", e, exc_info=True)
+
+
+def start_score_jobs_for_run_background(run_id: int) -> bool:
+    """Start `_score_jobs_for_run_impl` in a daemon thread if this run is not already scoring.
+
+    Returns True if a worker was started and took the lock; False if another scoring pass
+    is already in progress for this run_id.
+    """
+    lock = _lock_for_run(run_id)
+    handshake: queue.SimpleQueue[bool] = queue.SimpleQueue()
+
+    def worker() -> None:
+        if not lock.acquire(blocking=False):
+            logger.info("skip LLM scoring run_id=%s: already in progress", run_id)
+            handshake.put(False)
+            return
+        handshake.put(True)
+        try:
+            _score_jobs_for_run_impl(run_id)
+        finally:
+            lock.release()
+
+    threading.Thread(
+        target=worker,
+        name=f"llm-score-{run_id}",
+        daemon=True,
+    ).start()
+    return handshake.get()

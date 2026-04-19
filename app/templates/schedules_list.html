@@ -5,7 +5,7 @@
 <h1>Schedule history</h1>
 
 <h2 class="schedule-audit-heading">Saved schedule snapshots</h2>
-<p class="muted">Each filter keeps a <strong>single current snapshot</strong>: whenever you save new daily run times on a filter, the previous row for that filter is removed and replaced. <strong>Click a row</strong> (not Delete) to load <strong>Run 1</strong>, <strong>Run 2</strong>, … status for that snapshot’s local times — default day is the log date in the snapshot timezone. The <strong>Timezone</strong> column is the zone the app used when that row was saved (historical), not necessarily the zone in use after you change <code>.env</code>.</p>
+<p class="muted">Each filter keeps a <strong>single current snapshot</strong>: whenever you save new daily run times on a filter, the previous row for that filter is removed and replaced. <strong>Click a row</strong> (not Delete) to load <strong>Run 1</strong>, <strong>Run 2</strong>, … status for that snapshot’s local times — default day is the log date in the snapshot timezone. The <strong>Timezone</strong> column is the zone the app used when that row was saved (historical), not necessarily the zone in use after you change <code>.env</code>. Deleting a row here <strong>removes the automated schedule</strong> for that filter (same as deleting the schedule on the filter page) and clears the snapshot.</p>
 
 {% if audits %}
 <div class="table-wrap">
@@ -45,7 +45,7 @@
           <td>{{ a.job_title|e }}</td>
           <td>{{ a.location|e }}</td>
           <td class="table-actions audit-row-actions" onclick="event.stopPropagation()">
-            <form method="post" action="/schedules/audit/{{ a.id }}/delete" class="inline-form" onsubmit="return confirm('Remove this schedule log entry? This does not change the filter’s current saved times.');">
+            <form method="post" action="/schedules/audit/{{ a.id }}/delete" class="inline-form" onsubmit="return confirm('Remove this schedule? Automated runs for this filter will stop.');">
               <button type="submit" class="btn-secondary btn-compact">Delete</button>
             </form>
           </td>

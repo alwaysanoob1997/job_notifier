@@ -27,6 +27,7 @@ from app.services.scheduler import (
     schedule_option_label,
 )
 from app.services.filter_delete import get_filter_delete_context, try_delete_filter
+from app.services.schedule_sync import clear_filter_schedule_and_audits
 from app.services.run_delete import cleanup_llm_scores_for_jobs, delete_scrape_run
 from app.services.ideal_job_requirements import get_active_requirement
 from app.services.schedule_day_status import (
@@ -34,6 +35,7 @@ from app.services.schedule_day_status import (
     compute_slot_day_statuses_for_slots,
     slots_hm_from_schedule_audit,
 )
+from app.services.job_match_scoring import start_score_jobs_for_run_background
 from app.services.scrape_runner import start_scrape_if_idle_for_filter
 from app.templating import templates
 
@@ -213,6 +215,7 @@ def filter_detail(request: Request, filter_id: int, db: Session = Depends(get_db
     schedule_options = [(n, schedule_option_label(n)) for n in range(1, MAX_SCHEDULE_SLOTS + 1)]
     initial_schedule_preset = _matching_even_preset_key(slot_strings, even_presets)
     schedule_blurb = format_schedule_blurb(filt)
+    has_schedule = bool(slot_strings)
     return templates.TemplateResponse(
         request,
         "filter_detail.html",
@@ -225,6 +228,7 @@ def filter_detail(request: Request, filter_id: int, db: Session = Depends(get_db
             "max_schedule_slots": MAX_SCHEDULE_SLOTS,
             "initial_schedule_preset": initial_schedule_preset,
             "schedule_blurb": schedule_blurb,
+            "has_schedule": has_schedule,
         },
     )
 
@@ -246,8 +250,7 @@ def save_filter(
     filt.job_title = job_title.strip()
     filt.location = (location or "").strip() or "Bengaluru"
 
-    if save_kind != "search":
-        prev_stored = (filt.schedule_times_json, filt.runs_per_day)
+    if save_kind == "schedule":
         try:
             arr = json.loads(schedule_payload) if (schedule_payload or "").strip() else []
         except json.JSONDecodeError:
@@ -261,28 +264,36 @@ def save_filter(
         else:
             filt.schedule_times_json = None
             filt.runs_per_day = 0
-        after_stored = (filt.schedule_times_json, filt.runs_per_day)
-        if prev_stored != after_stored:
-            after_slots = tuple(effective_daily_slots(filt))
-            times_snapshot = filt.schedule_times_json or json.dumps(
-                [f"{h:02d}:{m:02d}" for h, m in after_slots]
+        after_slots = tuple(effective_daily_slots(filt))
+        times_snapshot = filt.schedule_times_json or json.dumps(
+            [f"{h:02d}:{m:02d}" for h, m in after_slots]
+        )
+        db.execute(delete(ScheduleAudit).where(ScheduleAudit.filter_id == filt.id))
+        db.add(
+            ScheduleAudit(
+                schedule_id=str(uuid.uuid4()),
+                logged_at=datetime.now(timezone.utc),
+                filter_id=filt.id,
+                runs_count=len(after_slots),
+                schedule_times_json=times_snapshot,
+                runs_per_day=filt.runs_per_day,
+                filter_name=filt.name or "",
+                job_title=filt.job_title or "",
+                location=filt.location or "",
+                timezone_name=_tz_storage_name(schedule_status_tzinfo()),
             )
-            db.execute(delete(ScheduleAudit).where(ScheduleAudit.filter_id == filt.id))
-            db.add(
-                ScheduleAudit(
-                    schedule_id=str(uuid.uuid4()),
-                    logged_at=datetime.now(timezone.utc),
-                    filter_id=filt.id,
-                    runs_count=len(after_slots),
-                    schedule_times_json=times_snapshot,
-                    runs_per_day=filt.runs_per_day,
-                    filter_name=filt.name or "",
-                    job_title=filt.job_title or "",
-                    location=filt.location or "",
-                    timezone_name=_tz_storage_name(schedule_status_tzinfo()),
-                )
-            )
+        )
 
+    db.commit()
+    refresh_schedule()
+    return RedirectResponse(url=f"/filters/{filter_id}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/filters/{filter_id}/schedule/delete", name="delete_filter_schedule")
+def delete_filter_schedule(filter_id: int, db: Session = Depends(get_db)):
+    ok = clear_filter_schedule_and_audits(db, filter_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Filter not found")
     db.commit()
     refresh_schedule()
     return RedirectResponse(url=f"/filters/{filter_id}", status_code=status.HTTP_303_SEE_OTHER)
@@ -400,8 +411,12 @@ def delete_schedule_audit(audit_id: int, db: Session = Depends(get_db)):
     row = db.get(ScheduleAudit, audit_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Schedule log entry not found")
-    db.delete(row)
+    fid = row.filter_id
+    ok = clear_filter_schedule_and_audits(db, fid)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Filter not found")
     db.commit()
+    refresh_schedule()
     return RedirectResponse(url="/schedules", status_code=status.HTTP_303_SEE_OTHER)
 
 
@@ -439,6 +454,27 @@ def run_delete(run_id: int, db: Session = Depends(get_db)):
     cleanup_llm_scores_for_jobs(job_ids)
     return RedirectResponse(
         url="/runs?deleted=1",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+@router.post("/runs/{run_id}/rescore")
+def run_rescore(run_id: int, db: Session = Depends(get_db)):
+    run = db.get(ScrapeRun, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run.status == "running":
+        return RedirectResponse(
+            url=f"/runs/{run_id}?blocked=rescore_running",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+    if not start_score_jobs_for_run_background(run_id):
+        return RedirectResponse(
+            url=f"/runs/{run_id}?blocked=rescore_busy",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+    return RedirectResponse(
+        url=f"/runs/{run_id}?rescored=1",
         status_code=status.HTTP_303_SEE_OTHER,
     )
 
@@ -489,7 +525,13 @@ def run_status_partial(request: Request, run_id: int, db: Session = Depends(get_
 
 
 @router.get("/runs/{run_id}")
-def run_detail(request: Request, run_id: int, db: Session = Depends(get_db)):
+def run_detail(
+    request: Request,
+    run_id: int,
+    db: Session = Depends(get_db),
+    blocked: str | None = Query(None),
+    rescored: str | None = Query(None),
+):
     run = db.get(ScrapeRun, run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
@@ -504,5 +546,11 @@ def run_detail(request: Request, run_id: int, db: Session = Depends(get_db)):
     return templates.TemplateResponse(
         request,
         "run_detail.html",
-        {"run": run, "new_jobs": new_jobs, "scores_by_job_id": scores_by_job_id},
+        {
+            "run": run,
+            "new_jobs": new_jobs,
+            "scores_by_job_id": scores_by_job_id,
+            "blocked": blocked,
+            "rescored": rescored,
+        },
     )

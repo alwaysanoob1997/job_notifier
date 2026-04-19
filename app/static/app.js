@@ -243,7 +243,8 @@
     var payload = document.getElementById("schedule-payload");
     var preset = document.getElementById("even-spacing-preset");
     var addBtn = document.getElementById("add-schedule-slot");
-    var addScheduleBtn = document.getElementById("add-schedule-btn");
+    var addScheduleBtn = document.getElementById("schedule-add-btn");
+    var editBtn = document.getElementById("schedule-edit-btn");
     var editor = document.getElementById("schedule-editor");
     var saveKindInput = document.getElementById("save-kind-input");
     var tpl = document.getElementById("schedule-slot-template");
@@ -353,12 +354,14 @@
       return editor && !editor.hidden;
     }
 
-    function updateScheduleActionButtons() {
+    function openEditor() {
+      if (editor) editor.hidden = false;
+      updateAddTimeButton();
+    }
+
+    function updateAddTimeButton() {
       var n = wrap.querySelectorAll(".schedule-slot-row").length;
       var nonePreset = preset && preset.value === "__none__";
-      if (addScheduleBtn) {
-        addScheduleBtn.hidden = editorIsOpen() || n > 0;
-      }
       if (addBtn) {
         addBtn.hidden = !editorIsOpen() || n >= maxSlots || nonePreset;
       }
@@ -410,12 +413,13 @@
           row.remove();
           syncPayload();
           updatePresetFromTimes();
-          updateScheduleActionButtons();
+          updateAddTimeButton();
         });
       }
       function onTimePartChange() {
         syncPayload();
         updatePresetFromTimes();
+        updateAddTimeButton();
       }
       var hSel = row.querySelector(".schedule-hour-select");
       var mSel = row.querySelector(".schedule-minute-select");
@@ -433,6 +437,7 @@
       bindRow(row);
       syncPayload();
       if (!skipPresetUpdate) updatePresetFromTimes();
+      updateAddTimeButton();
     }
 
     wrap.querySelectorAll(".schedule-slot-row").forEach(function (row) {
@@ -443,20 +448,27 @@
 
     if (addBtn) {
       addBtn.addEventListener("click", function () {
-        if (editor) editor.hidden = false;
+        openEditor();
         appendRowFromTemplate("");
-        updateScheduleActionButtons();
+        updateAddTimeButton();
       });
     }
 
     if (addScheduleBtn) {
       addScheduleBtn.addEventListener("click", function () {
         if (wrap.querySelectorAll(".schedule-slot-row").length >= maxSlots) return;
-        if (editor) editor.hidden = false;
+        openEditor();
         if (wrap.querySelectorAll(".schedule-slot-row").length === 0) {
           appendRowFromTemplate("09:00");
         }
-        updateScheduleActionButtons();
+        updatePresetFromTimes();
+        updateAddTimeButton();
+      });
+    }
+
+    if (editBtn) {
+      editBtn.addEventListener("click", function () {
+        openEditor();
       });
     }
 
@@ -467,10 +479,10 @@
           wrap.innerHTML = "";
           syncPayload();
           updatePresetFromTimes();
-          updateScheduleActionButtons();
+          updateAddTimeButton();
           return;
         }
-        if (editor) editor.hidden = false;
+        openEditor();
         if (n === "__custom__") {
           if (wrap.querySelectorAll(".schedule-slot-row").length === 0) {
             appendRowFromTemplate("");
@@ -478,7 +490,7 @@
           syncPayload();
           preset.value = "__custom__";
           updatePresetFromTimes();
-          updateScheduleActionButtons();
+          updateAddTimeButton();
           return;
         }
         if (!n) return;
@@ -492,7 +504,7 @@
         preset.value = n;
         syncPayload();
         updatePresetFromTimes();
-        updateScheduleActionButtons();
+        updateAddTimeButton();
       });
     }
 
@@ -506,7 +518,7 @@
     });
     syncPayload();
     updatePresetFromTimes();
-    updateScheduleActionButtons();
+    updateAddTimeButton();
   }
 
   function initIdealJobRequirementsCard() {
