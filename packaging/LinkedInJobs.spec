@@ -3,7 +3,7 @@
 
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 # Analysis, PYZ, EXE, COLLECT, BUNDLE are injected by PyInstaller when this spec runs.
 
@@ -64,6 +64,10 @@ _hiddenimports += [
     "dns.rdtypes.ANY",
     "dns.rdtypes.IN",
 ]
+
+# desktop_main passes "app.main:app" to uvicorn as a string — PyInstaller does not
+# trace that import; bundle the whole application package.
+_hiddenimports += collect_submodules("app")
 
 a = Analysis(
     [str(_REPO_ROOT / "desktop_main.py")],
