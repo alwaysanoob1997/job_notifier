@@ -18,8 +18,11 @@ if [[ ! -f "$PNG" ]]; then
   exit 1
 fi
 
-ICONSET="$(mktemp -d "${TMPDIR:-/tmp}/linkedinjobs.iconset.XXXXXX")"
-cleanup() { rm -rf "$ICONSET"; }
+# iconutil requires a directory whose name ends with ".iconset" (not "name.iconset.RANDOM").
+WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/linkedinjobs-icon.XXXXXX")"
+ICONSET="${WORKDIR}/AppIcon.iconset"
+mkdir "$ICONSET"
+cleanup() { rm -rf "$WORKDIR"; }
 trap cleanup EXIT
 
 sips -z 16 16     "$PNG" --out "${ICONSET}/icon_16x16.png"       >/dev/null
