@@ -26,6 +26,20 @@ def dotenv_file_path() -> Path:
     return _ENV_FILE
 
 
+def _ensure_user_env_file_exists() -> None:
+    """Create a minimal `.env` with Settings-managed keys when the file is missing."""
+    if _ENV_FILE.is_file():
+        return
+    try:
+        from app.env_user_settings import write_default_env_file_if_missing
+    except ImportError:
+        return
+    try:
+        write_default_env_file_if_missing(_ENV_FILE)
+    except (OSError, PermissionError) as e:
+        _logger.warning("Could not create default .env at %s: %s", _ENV_FILE, e)
+
+
 def _load_repo_env() -> None:
     if not _ENV_FILE.is_file():
         return
@@ -41,6 +55,7 @@ def _load_repo_env() -> None:
     load_dotenv(_ENV_FILE)
 
 
+_ensure_user_env_file_exists()
 _load_repo_env()
 
 

@@ -41,6 +41,19 @@ class IdealJobRequirement(Base):
     )
 
 
+class SystemPromptVersion(Base):
+    """Append-only versions of the LLM system prompt for job match scoring; latest row is active."""
+
+    __tablename__ = "system_prompt_versions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    prompt: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: dt.datetime.now(dt.timezone.utc),
+    )
+
+
 class JobFilter(Base):
     __tablename__ = "job_filters"
 

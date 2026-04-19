@@ -11,12 +11,15 @@ from sqlalchemy import and_, delete, select
 from sqlalchemy.orm import Session
 
 from app.config import (
+    dotenv_file_path,
     schedule_catchup_min_gap_before_next_slot_seconds,
     schedule_status_tzinfo,
 )
+from app.default_system_prompt import DEFAULT_SYSTEM_PROMPT
+from app.env_user_settings import default_values, form_values_for_template, merge_and_write_env
 from app.dependencies import get_db
 from app.llm_score_db import fetch_scores_for_job_ids
-from app.models import AppSettings, IdealJobRequirement, Job, JobFilter, ScheduleAudit, ScrapeRun
+from app.models import AppSettings, IdealJobRequirement, Job, JobFilter, ScheduleAudit, ScrapeRun, SystemPromptVersion
 from app.services.scheduler import (
     MAX_SCHEDULE_SLOTS,
     daily_run_times,
@@ -24,12 +27,17 @@ from app.services.scheduler import (
     format_schedule_blurb,
     parse_schedule_time_values,
     refresh_schedule,
+    restart_scheduler,
     schedule_option_label,
 )
 from app.services.filter_delete import get_filter_delete_context, try_delete_filter
 from app.services.schedule_sync import clear_filter_schedule_and_audits
 from app.services.run_delete import cleanup_llm_scores_for_jobs, delete_scrape_run
 from app.services.ideal_job_requirements import get_active_requirement
+from app.services.system_prompt_versions import (
+    delete_all_system_prompt_versions,
+    get_active_system_prompt_version,
+)
 from app.services.schedule_day_status import (
     STATUS_LABELS,
     compute_slot_day_statuses_for_slots,
@@ -479,13 +487,80 @@ def run_rescore(run_id: int, db: Session = Depends(get_db)):
     )
 
 
+def _parse_managed_config_form(
+    gap_s: str,
+    tz_s: str,
+    host_s: str,
+    port_s: str,
+    user_s: str,
+    from_s: str,
+    pwd_s: str,
+    cli_s: str,
+) -> tuple[dict[str, str] | None, str | None]:
+    gs = (gap_s or "").strip()
+    try:
+        gap = int(gs if gs else "1800")
+    except ValueError:
+        return None, "catchup"
+    gap = max(0, gap)
+    ps = (port_s or "").strip()
+    try:
+        port = int(ps if ps else "587")
+    except ValueError:
+        return None, "port"
+    if not (1 <= port <= 65535):
+        return None, "port"
+    updates = {
+        "LINKEDIN_SCHEDULE_CATCHUP_MIN_GAP_SEC": str(gap),
+        "LINKEDIN_SCHEDULE_STATUS_TZ": (tz_s or "").strip(),
+        "LINKEDIN_SMTP_HOST": (host_s or "").strip(),
+        "LINKEDIN_SMTP_PORT": str(port),
+        "LINKEDIN_SMTP_USER": (user_s or "").strip(),
+        "LINKEDIN_SMTP_FROM": (from_s or "").strip(),
+        "LINKEDIN_SMTP_PASSWORD": (pwd_s or "").strip(),
+        "LINKEDIN_LMS_CLI": ((cli_s or "").strip() or "lms"),
+    }
+    return updates, None
+
+
+def _reload_dotenv_and_restart_scheduler() -> None:
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+    load_dotenv(dotenv_file_path(), override=True)
+    restart_scheduler()
+
+
 @router.get("/settings/advanced")
-def advanced_settings(request: Request, db: Session = Depends(get_db)):
+def advanced_settings(
+    request: Request,
+    db: Session = Depends(get_db),
+    system_prompt_error: str | None = Query(None),
+    config_error: str | None = Query(None),
+    config_saved: str | None = Query(None),
+):
     settings = db.get(AppSettings, 1)
+    active_sp = get_active_system_prompt_version(db)
+    editor_prompt = DEFAULT_SYSTEM_PROMPT
+    if active_sp is not None and (active_sp.prompt or "").strip():
+        editor_prompt = (active_sp.prompt or "").strip()
+    cfg = form_values_for_template()
     return templates.TemplateResponse(
         request,
         "advanced_settings.html",
-        {"settings": settings},
+        {
+            "settings": settings,
+            "system_prompt_editor_value": editor_prompt,
+            "system_prompt_active_id": active_sp.id if active_sp else None,
+            "system_prompt_active_at": active_sp.created_at if active_sp else None,
+            "system_prompt_using_builtin": active_sp is None,
+            "system_prompt_error": system_prompt_error,
+            "open_system_prompt_editor": system_prompt_error == "blank",
+            "config_values": cfg,
+            "config_error": config_error,
+            "config_saved": config_saved,
+        },
     )
 
 
@@ -502,6 +577,79 @@ def save_advanced_settings(
     row.chrome_executable_path = chrome_executable_path.strip() or None
     row.chrome_binary_location = chrome_binary_location.strip() or None
     db.commit()
+    return RedirectResponse(url="/settings/advanced", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/settings/system-prompt")
+def save_system_prompt(
+    prompt: str | None = Form(None),
+    db: Session = Depends(get_db),
+):
+    text = (prompt or "").strip()
+    if not text:
+        return RedirectResponse(
+            url="/settings/advanced?system_prompt_error=blank",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+    active = get_active_system_prompt_version(db)
+    if active is not None and (active.prompt or "").strip() == text:
+        return RedirectResponse(url="/settings/advanced", status_code=status.HTTP_303_SEE_OTHER)
+    db.add(SystemPromptVersion(prompt=text))
+    db.commit()
+    return RedirectResponse(url="/settings/advanced", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/settings/system-prompt/reset")
+def reset_system_prompt(db: Session = Depends(get_db)):
+    delete_all_system_prompt_versions(db)
+    db.commit()
+    return RedirectResponse(url="/settings/advanced", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/settings/config")
+def save_settings_config(
+    _db: Session = Depends(get_db),
+    LINKEDIN_SCHEDULE_CATCHUP_MIN_GAP_SEC: str = Form(""),
+    LINKEDIN_SCHEDULE_STATUS_TZ: str = Form(""),
+    LINKEDIN_SMTP_HOST: str = Form(""),
+    LINKEDIN_SMTP_PORT: str = Form(""),
+    LINKEDIN_SMTP_USER: str = Form(""),
+    LINKEDIN_SMTP_FROM: str = Form(""),
+    LINKEDIN_SMTP_PASSWORD: str = Form(""),
+    LINKEDIN_LMS_CLI: str = Form(""),
+):
+    parsed, err = _parse_managed_config_form(
+        LINKEDIN_SCHEDULE_CATCHUP_MIN_GAP_SEC,
+        LINKEDIN_SCHEDULE_STATUS_TZ,
+        LINKEDIN_SMTP_HOST,
+        LINKEDIN_SMTP_PORT,
+        LINKEDIN_SMTP_USER,
+        LINKEDIN_SMTP_FROM,
+        LINKEDIN_SMTP_PASSWORD,
+        LINKEDIN_LMS_CLI,
+    )
+    if err is not None or parsed is None:
+        return RedirectResponse(
+            url=f"/settings/advanced?config_error={err}",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+    merge_and_write_env(
+        dotenv_file_path(),
+        parsed,
+        preserve_blank_smtp_password=True,
+    )
+    _reload_dotenv_and_restart_scheduler()
+    return RedirectResponse(url="/settings/advanced?config_saved=1", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/settings/config/reset")
+def reset_settings_config(_db: Session = Depends(get_db)):
+    merge_and_write_env(
+        dotenv_file_path(),
+        default_values(),
+        preserve_blank_smtp_password=False,
+    )
+    _reload_dotenv_and_restart_scheduler()
     return RedirectResponse(url="/settings/advanced", status_code=status.HTTP_303_SEE_OTHER)
 
 

@@ -521,6 +521,51 @@
     updateAddTimeButton();
   }
 
+  function initSystemPromptSettingsCard() {
+    var shell = document.getElementById("system-prompt-shell");
+    var form = document.getElementById("system-prompt-editor");
+    var textarea = document.getElementById("system-prompt-text");
+    var cancel = document.getElementById("system-prompt-cancel");
+    if (!shell || !form || !textarea) return;
+    if (String(shell.tagName || "").toLowerCase() !== "details") return;
+
+    var snapText = "";
+
+    function restoreFromSnapshot() {
+      textarea.value = snapText;
+    }
+
+    shell.addEventListener("toggle", function () {
+      if (shell.open) {
+        snapText = textarea.value;
+        requestAnimationFrame(function () {
+          textarea.focus();
+        });
+      } else {
+        restoreFromSnapshot();
+      }
+    });
+
+    function closeEditor() {
+      shell.open = false;
+    }
+
+    if (cancel) {
+      cancel.addEventListener("click", function () {
+        restoreFromSnapshot();
+        closeEditor();
+      });
+    }
+
+    form.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        restoreFromSnapshot();
+        closeEditor();
+      }
+    });
+  }
+
   function initIdealJobRequirementsCard() {
     var shell = document.getElementById("ideal-job-shell");
     var form = document.getElementById("ideal-job-editor");
@@ -867,6 +912,7 @@
     initNavDrawer();
     initJobMetaToggle();
     initIdealJobRequirementsCard();
+    initSystemPromptSettingsCard();
     initFilterSchedulePage();
     initDataTables();
     initLmStudioSetupWizard();

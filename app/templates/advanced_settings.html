@@ -4,6 +4,86 @@
 <p><a class="btn-secondary" href="/">&larr; Home</a></p>
 <h1>Settings</h1>
 
+<details class="card ideal-job-shell" id="system-prompt-shell" {% if open_system_prompt_editor %}open{% endif %}>
+  <summary class="ideal-job-summary">
+    <span class="ideal-job-summary-inner">
+      <span class="ideal-job-summary-title">System prompt</span>
+      <span class="muted small ideal-job-summary-lead">Click to view or edit. Each save stores a new version; only the latest is used for job match scoring.</span>
+      {% if system_prompt_using_builtin %}
+      <span class="muted small ideal-job-summary-meta">Using built-in default.</span>
+      {% else %}
+      <span class="muted small ideal-job-summary-meta">Active version #{{ system_prompt_active_id }}, last saved {{ system_prompt_active_at|format_dt }}.</span>
+      {% endif %}
+      <span class="muted small ideal-job-summary-hint">Click to add or edit</span>
+      <span class="system-prompt-summary-actions" onclick="event.stopPropagation();">
+        <button type="button" class="schedule-icon-btn schedule-icon-btn--edit" title="Open editor" aria-label="Open editor" onclick="(function(){var d=document.getElementById('system-prompt-shell');if(d){d.open=true;}})();">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+      </span>
+    </span>
+  </summary>
+  {% if system_prompt_error == "blank" %}
+  <p class="error-inline" role="alert">System prompt cannot be empty.</p>
+  {% endif %}
+  <form method="post" action="/settings/system-prompt" class="ideal-job-editor" id="system-prompt-editor">
+    <label for="system-prompt-text">Prompt</label>
+    <textarea id="system-prompt-text" name="prompt" rows="14" required>{{ system_prompt_editor_value }}</textarea>
+    <p class="ideal-job-editor-actions">
+      <button type="button" class="btn-secondary" id="system-prompt-cancel">Cancel</button>
+      <button type="submit" class="btn-primary">Save prompt</button>
+    </p>
+  </form>
+  <form method="post" action="/settings/system-prompt/reset" class="ideal-job-editor system-prompt-reset-form" onsubmit="return confirm('Reset to the built-in default? All saved prompt versions will be removed.');">
+    <p class="muted small">Remove custom versions and use the app’s built-in default prompt.</p>
+    <button type="submit" class="btn-secondary">Reset to default</button>
+  </form>
+</details>
+
+<section class="card" id="user-config-card" aria-labelledby="user-config-heading">
+  <h2 id="user-config-heading">Config</h2>
+  <p class="muted">These values are written to your <code>.env</code> file (only the fields below). Other keys you edit by hand are left unchanged.</p>
+  {% if config_saved %}
+  <p class="lmstudio-settings-msg muted" role="status">Config saved.</p>
+  {% endif %}
+  {% if config_error == "catchup" %}
+  <p class="error-inline" role="alert">Catch-up gap must be a whole number of seconds.</p>
+  {% elif config_error == "port" %}
+  <p class="error-inline" role="alert">SMTP port must be between 1 and 65535.</p>
+  {% endif %}
+  <form method="post" action="/settings/config" class="user-config-form">
+    <label>Catch-up min gap (seconds)
+      <input name="LINKEDIN_SCHEDULE_CATCHUP_MIN_GAP_SEC" type="number" min="0" step="1" value="{{ config_values['LINKEDIN_SCHEDULE_CATCHUP_MIN_GAP_SEC'] }}" />
+    </label>
+    <label>Schedule timezone (IANA, e.g. Asia/Kolkata)
+      <input name="LINKEDIN_SCHEDULE_STATUS_TZ" type="text" value="{{ config_values['LINKEDIN_SCHEDULE_STATUS_TZ'] }}" placeholder="optional" autocomplete="off" />
+    </label>
+    <label>SMTP host
+      <input name="LINKEDIN_SMTP_HOST" type="text" value="{{ config_values['LINKEDIN_SMTP_HOST'] }}" placeholder="optional" autocomplete="off" />
+    </label>
+    <label>SMTP port
+      <input name="LINKEDIN_SMTP_PORT" type="number" min="1" max="65535" step="1" value="{{ config_values['LINKEDIN_SMTP_PORT'] }}" />
+    </label>
+    <label>SMTP email (username)
+      <input name="LINKEDIN_SMTP_USER" type="text" value="{{ config_values['LINKEDIN_SMTP_USER'] }}" placeholder="optional" autocomplete="username" />
+    </label>
+    <label>SMTP email (from address)
+      <input name="LINKEDIN_SMTP_FROM" type="text" value="{{ config_values['LINKEDIN_SMTP_FROM'] }}" placeholder="optional" autocomplete="email" />
+    </label>
+    <label>SMTP password
+      <input name="LINKEDIN_SMTP_PASSWORD" type="password" value="" placeholder="Leave blank to keep current password" autocomplete="current-password" />
+    </label>
+    <label>LM Studio CLI command
+      <input name="LINKEDIN_LMS_CLI" type="text" value="{{ config_values['LINKEDIN_LMS_CLI'] }}" placeholder="lms" autocomplete="off" />
+    </label>
+    <p class="user-config-actions">
+      <button type="submit" class="btn-primary">Save config</button>
+    </p>
+  </form>
+  <form method="post" action="/settings/config/reset" class="user-config-reset-form" onsubmit="return confirm('Reset these fields to defaults? Your SMTP password will be cleared from .env.');">
+    <button type="submit" class="btn-secondary">Reset config to defaults</button>
+  </form>
+</section>
+
 <section class="card" id="lmstudio-settings-card" aria-labelledby="lmstudio-settings-heading">
   <h2 id="lmstudio-settings-heading">LM Studio</h2>
   <p class="muted">Job match scoring uses a local model via LM Studio. Preferred model is stored in <code>~/LinkedInJobs/lmstudio_prefs.json</code>.</p>

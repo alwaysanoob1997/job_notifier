@@ -293,3 +293,10 @@ def shutdown_scheduler() -> None:
         _scheduler.shutdown(wait=False)
         _scheduler = None
         logger.info("APScheduler shut down")
+
+
+def restart_scheduler() -> None:
+    """Rebuild the scheduler so schedule timezone and env-driven catch-up use current os.environ."""
+    shutdown_scheduler()
+    start_scheduler()
+    reconcile_missed_scheduled_runs()

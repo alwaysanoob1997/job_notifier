@@ -109,6 +109,16 @@ def _migrate_sqlite_schema(engine) -> None:
                 )
             if "notify_email" not in ijr_cols:
                 conn.execute(text("ALTER TABLE ideal_job_requirements ADD COLUMN notify_email VARCHAR(512)"))
+        if "system_prompt_versions" not in tables:
+            conn.execute(
+                text(
+                    "CREATE TABLE system_prompt_versions ("
+                    "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
+                    "prompt TEXT NOT NULL, "
+                    "created_at DATETIME NOT NULL"
+                    ")"
+                )
+            )
 
 
 def init_db() -> None:

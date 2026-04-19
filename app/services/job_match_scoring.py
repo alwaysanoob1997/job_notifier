@@ -26,10 +26,12 @@ from app.config import (
     lmstudio_model,
 )
 from app.db import session_scope
+from app.default_system_prompt import DEFAULT_SYSTEM_PROMPT
 from app.llm_score_db import JobLlmScore, session_scope_llm
 from app.models import Job, ScrapeRun
 from app.services.ideal_job_requirements import get_active_requirement
 from app.services.smtp_notify import send_plaintext_email
+from app.services.system_prompt_versions import effective_system_prompt_for_scoring
 
 logger = logging.getLogger(__name__)
 
@@ -46,17 +48,6 @@ def _lock_for_run(run_id: int) -> threading.Lock:
 
 _MAX_DESCRIPTION_CHARS = 12_000
 _MAX_HTML_SNIPPET = 400
-
-_SYSTEM_PROMPT = """You compare job listings to the user's ideal job requirements.
-Reply with one JSON object only, matching the schema exactly.
-Score is an integer 0–100.
-
-Scoring rules (strict):
-- Job title and implied role matter far more than company, location, salary, perks, or generic skill overlap.
-- First decide if the listing is the same professional domain / role family as what the user is seeking (from the ideal text). If it is not the same domain, score must be 0. Do not inflate score from tangential overlap.
-- Only when the domain matches may you assign a non-zero score; within that case, title/role alignment should drive almost all of the score, with other factors as small tie-breakers only.
-
-Reasoning must be very short: a few terse lines only (no paragraphs, no long explanations). Each line should be a quick note (e.g. domain match yes/no, title fit)."""
 
 _USER_TEMPLATE = """## User ideal job requirements
 
@@ -345,8 +336,10 @@ def _score_jobs_for_run_impl(run_id: int) -> None:
     run_title = ""
     run_loc = ""
     ideal_text = ""
+    llm_system_prompt = DEFAULT_SYSTEM_PROMPT
 
     with session_scope() as session:
+        llm_system_prompt = effective_system_prompt_for_scoring(session)
         active = get_active_requirement(session)
         ideal_text = (active.description or "").strip() if active else ""
         if not ideal_text:
@@ -398,7 +391,7 @@ def _score_jobs_for_run_impl(run_id: int) -> None:
                 blob = format_job_blob(job)
                 user_msg = _USER_TEMPLATE.format(ideal=ideal_text, job_blob=blob)
                 messages = [
-                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {"role": "system", "content": llm_system_prompt},
                     {"role": "user", "content": user_msg},
                 ]
                 try:
@@ -442,6 +435,11 @@ def _score_jobs_for_run_impl(run_id: int) -> None:
             shutdown_lmstudio_after_inference()
         except Exception as e:
             logger.warning("LM Studio shutdown step failed: %s", e, exc_info=True)
+
+
+def score_jobs_for_run(run_id: int) -> None:
+    """Run LLM scoring synchronously (used by tests)."""
+    _score_jobs_for_run_impl(run_id)
 
 
 def start_score_jobs_for_run_background(run_id: int) -> bool:
