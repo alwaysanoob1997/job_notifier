@@ -1,18 +1,25 @@
 """
 Public guest jobs listing + job view pages (no li_at cookie).
-Uses stdlib only; same data visible to non-logged-in visitors.
+Uses stdlib urllib plus certifi (when installed) for TLS; same data as a signed-out visitor.
 """
 from __future__ import annotations
 
 import html as html_module
 import re
+import ssl
+import sys
 import time
-from typing import List, NamedTuple, Optional, Tuple
+from typing import Dict, List, NamedTuple, Optional, Tuple
 from urllib.parse import urlencode, urlparse, parse_qsl
 from urllib.request import Request, urlopen
 
 from .constants import JOBS_GUEST_SEE_MORE_URL, JOBS_PAGE_SIZE
 from .job_salary_ldjson import extract_salary_from_job_page_html
+
+try:
+    import certifi
+except ImportError:
+    certifi = None  # type: ignore[misc, assignment]
 
 def is_login_challenge_url(url: str, page_title: str = '') -> bool:
     """True when URL or title indicates LinkedIn login / checkpoint instead of jobs SERP."""
@@ -28,13 +35,36 @@ def is_login_challenge_url(url: str, page_title: str = '') -> bool:
     return False
 
 
-DEFAULT_HEADERS = {
-    'User-Agent': (
-        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 '
-        '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    ),
-    'Accept-Language': 'en-US,en;q=0.9',
-}
+_UA_LINUX = (
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 '
+    '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+)
+_UA_MAC = (
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 '
+    '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+)
+
+
+def _default_request_headers() -> Dict[str, str]:
+    ua = _UA_MAC if sys.platform == 'darwin' else _UA_LINUX
+    return {
+        'User-Agent': ua,
+        'Accept-Language': 'en-US,en;q=0.9',
+    }
+
+
+# Kept for callers/tests that imported DEFAULT_HEADERS (platform-aware User-Agent).
+DEFAULT_HEADERS = _default_request_headers()
+
+
+def _ssl_context_for_https() -> ssl.SSLContext:
+    """PyInstaller/macOS bundles often lack system CA paths; certifi fixes TLS to LinkedIn."""
+    if certifi is not None:
+        try:
+            return ssl.create_default_context(cafile=certifi.where())
+        except (OSError, ssl.SSLError):
+            pass
+    return ssl.create_default_context()
 
 
 class GuestJobCard(NamedTuple):
@@ -48,8 +78,9 @@ class GuestJobCard(NamedTuple):
 
 
 def _http_get(url: str, timeout: int = 25) -> str:
-    req = Request(url, headers=dict(DEFAULT_HEADERS), method='GET')
-    with urlopen(req, timeout=timeout) as resp:
+    req = Request(url, headers=_default_request_headers(), method='GET')
+    ctx = _ssl_context_for_https()
+    with urlopen(req, timeout=timeout, context=ctx) as resp:
         return resp.read().decode('utf-8', errors='replace')
 
 

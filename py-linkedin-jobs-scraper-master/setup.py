@@ -22,6 +22,7 @@ setup(
         'linkedin_jobs_scraper.utils',
     ],
     install_requires=[
+        'certifi',
         'selenium>=4.12.0',
     ],
     classifiers=[

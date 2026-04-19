@@ -1,5 +1,6 @@
 import traceback
 from typing import List, NamedTuple, Optional, TYPE_CHECKING
+from urllib.parse import parse_qs, urlparse
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -87,6 +88,24 @@ class GuestStrategy(Strategy):
             title = ''
         return is_login_challenge_url(driver.current_url, title)
 
+    @staticmethod
+    def _url_indicates_job_id(url: str, job_id: str) -> bool:
+        """True when the jobs SERP URL clearly references this numeric job id (panel HTML may omit it)."""
+        jid = (job_id or '').strip()
+        if not jid or not jid.isdigit():
+            return False
+        parsed = urlparse(url)
+        q = parse_qs(parsed.query)
+        for key in ('currentJobId', 'currentjobid'):
+            vals = q.get(key) or q.get(key.lower())
+            if vals and vals[0] == jid:
+                return True
+        path = parsed.path or ''
+        # e.g. .../jobs/view/1234567890/...
+        if f'/view/{jid}' in path or path.rstrip('/').endswith(f'/view/{jid}'):
+            return True
+        return False
+
     def __load_job_details(
         self,
         driver: webdriver,
@@ -98,28 +117,52 @@ class GuestStrategy(Strategy):
             timeout = self.scraper.job_details_wait_timeout
         elapsed = 0.0
         sleep_time = 0.05
+        min_desc_relaxed = 80
 
         while elapsed < timeout:
-            loaded = driver.execute_script(
+            state = driver.execute_script(
                 '''
                     const jobId = (arguments[0] || '').trim();
                     const detailsPanel = document.querySelector(arguments[1]);
                     const description = document.querySelector(arguments[2]);
-                    if (!detailsPanel || !description || description.innerText.trim().length === 0) {
-                        return false;
+                    if (!detailsPanel || !description) {
+                        return [false, 0, false];
+                    }
+                    const text = description.innerText.trim();
+                    const descLen = text.length;
+                    if (descLen === 0) {
+                        return [true, 0, false];
                     }
                     if (!jobId) {
-                        return true;
+                        return [true, descLen, true];
                     }
-                    return detailsPanel.innerHTML.includes(jobId);
+                    const panelHit = detailsPanel.innerHTML.includes(jobId);
+                    return [true, descLen, panelHit];
                 ''',
                 job_id,
                 selectors.details_panel,
                 selectors.description,
             )
 
-            if loaded:
-                return {'success': True}
+            try:
+                has_panel_and_desc, desc_len, panel_hit = state
+            except (TypeError, ValueError):
+                has_panel_and_desc, desc_len, panel_hit = False, 0, False
+
+            url = ''
+            try:
+                url = driver.current_url or ''
+            except BaseException:
+                pass
+
+            jid = (job_id or '').strip()
+            if has_panel_and_desc and desc_len > 0:
+                if not jid:
+                    return {'success': True}
+                if panel_hit:
+                    return {'success': True}
+                if desc_len >= min_desc_relaxed and self._url_indicates_job_id(url, jid):
+                    return {'success': True}
 
             sleep(sleep_time)
             elapsed += sleep_time
