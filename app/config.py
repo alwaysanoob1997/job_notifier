@@ -1,10 +1,20 @@
 import logging
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-_ENV_FILE = _REPO_ROOT / ".env"
+
+
+def _default_env_file_path() -> Path:
+    """Development: repo-root `.env`. Frozen (PyInstaller): optional `~/LinkedInJobs/.env`."""
+    if getattr(sys, "frozen", False):
+        return Path.home() / "LinkedInJobs" / ".env"
+    return _REPO_ROOT / ".env"
+
+
+_ENV_FILE = _default_env_file_path()
 
 _logger = logging.getLogger(__name__)
 
@@ -12,7 +22,7 @@ _lmstudio_wsl_url_logged = False
 
 
 def dotenv_file_path() -> Path:
-    """Absolute path to repo-root `.env` (may not exist)."""
+    """Absolute path to the dotenv file loaded at import (may not exist)."""
     return _ENV_FILE
 
 
@@ -23,7 +33,7 @@ def _load_repo_env() -> None:
         from dotenv import load_dotenv
     except ImportError:
         _logger.warning(
-            "Repo .env exists at %s but python-dotenv is not installed; "
+            "Dotenv file exists at %s but python-dotenv is not installed; "
             "pip install python-dotenv or export variables in your shell.",
             _ENV_FILE,
         )
