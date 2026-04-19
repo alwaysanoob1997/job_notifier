@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import threading
+import time
 from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
@@ -36,6 +37,7 @@ def create_pending_run(session: Session, filter_id: int, trigger: str) -> Scrape
     filt = session.get(JobFilter, filter_id)
     if filt is None:
         raise RuntimeError(f"JobFilter {filter_id} not found")
+    limit = scrape_job_limit()
     run = ScrapeRun(
         filter_id=filter_id,
         started_at=dt.datetime.now(dt.timezone.utc),
@@ -46,6 +48,7 @@ def create_pending_run(session: Session, filter_id: int, trigger: str) -> Scrape
         jobs_returned=0,
         jobs_new=0,
         jobs_duplicate=0,
+        scrape_target_limit=limit,
     )
     session.add(run)
     session.flush()
@@ -97,6 +100,8 @@ def run_scrape_sync(run_id: int) -> None:
     rows: list[EventData] = []
     errors: list[str] = []
     collect_lock = threading.Lock()
+    progress_flush_lock = threading.Lock()
+    progress_state = {"committed_n": 0, "flush_t": 0.0}
 
     try:
         with session_scope() as session:
@@ -123,10 +128,31 @@ def run_scrape_sync(run_id: int) -> None:
             kwargs["chrome_binary_location"] = chrome_binary_location
 
         scraper = LinkedinScraper(**kwargs)
+        job_limit = scrape_job_limit()
+
+        def _persist_jobs_returned_count(n: int) -> None:
+            try:
+                with session_scope() as session:
+                    run_row = session.get(ScrapeRun, run_id)
+                    if run_row is not None:
+                        run_row.jobs_returned = n
+            except Exception as e:
+                logger.warning("persist scrape progress failed: %s", e)
 
         def on_data(data: EventData) -> None:
             with collect_lock:
                 rows.append(data)
+                n = len(rows)
+            now = time.monotonic()
+            with progress_flush_lock:
+                if n - progress_state["committed_n"] < 5 and now - progress_state["flush_t"] < 1.0:
+                    return
+            with collect_lock:
+                n2 = len(rows)
+            _persist_jobs_returned_count(n2)
+            with progress_flush_lock:
+                progress_state["committed_n"] = n2
+                progress_state["flush_t"] = time.monotonic()
 
         def on_error(err: str) -> None:
             with collect_lock:
@@ -141,7 +167,7 @@ def run_scrape_sync(run_id: int) -> None:
                 query=job_title,
                 options=QueryOptions(
                     locations=[location],
-                    limit=scrape_job_limit(),
+                    limit=job_limit,
                     filters=QueryFilters(
                         time=TimeFilters.DAY,
                         relevance=RelevanceFilters.RECENT,

@@ -1,6 +1,30 @@
 <p><strong>Status:</strong> <span class="status status-{{ run.status }}">{{ run.status }}</span></p>
 <p><strong>Started:</strong> {{ run.started_at|format_dt }}{% if run.finished_at %} · <strong>Finished:</strong> {{ run.finished_at|format_dt }}{% endif %}</p>
+{% if run.status == 'running' and run.scrape_target_limit > 0 %}
+<div class="run-progress-block">
+  <p class="run-progress-label muted"><strong>Scrape progress:</strong> listings received vs configured limit (LinkedIn may return fewer).</p>
+  <progress class="run-progress-bar" max="{{ run.scrape_target_limit }}" value="{% if run.jobs_returned < run.scrape_target_limit %}{{ run.jobs_returned }}{% else %}{{ run.scrape_target_limit }}{% endif %}"></progress>
+  <p class="run-progress-meta muted">{{ run.jobs_returned }} / up to {{ run.scrape_target_limit }}</p>
+</div>
+{% endif %}
 <p><strong>Returned:</strong> {{ run.jobs_returned }} · <strong>New:</strong> {{ run.jobs_new }} · <strong>Duplicates:</strong> {{ run.jobs_duplicate }}</p>
+{% if run.status == 'success' or run.llm_compare_total is not none %}
+<div class="run-progress-block run-llm-block">
+  <p class="run-progress-label"><strong>Requirement comparison (LLM)</strong></p>
+  {% if run.llm_compare_total is none %}
+  <p class="muted">Progress for this step was not recorded (older run).</p>
+  {% elif run.llm_compare_total == -1 %}
+  <p class="muted">Skipped — no active ideal job requirements.</p>
+  {% elif run.llm_compare_total == 0 %}
+  <p class="muted">No new jobs to compare for this run.</p>
+  {% else %}
+  <progress class="run-progress-bar" max="{{ run.llm_compare_total }}" value="{% if run.llm_compare_done < run.llm_compare_total %}{{ run.llm_compare_done }}{% else %}{{ run.llm_compare_total }}{% endif %}"></progress>
+  <p class="run-progress-meta muted">Compared {{ run.llm_compare_done }} / {{ run.llm_compare_total }} job listing{% if run.llm_compare_total != 1 %}s{% endif %}{% if run.llm_compare_done >= run.llm_compare_total %} — complete{% else %} — in progress{% endif %}.</p>
+  {% endif %}
+</div>
+{% elif run.status == 'failed' %}
+<p class="muted">Requirement comparison was not run (scrape did not succeed).</p>
+{% endif %}
 {% if run.error_message %}
 <pre class="error">{{ run.error_message }}</pre>
 {% endif %}

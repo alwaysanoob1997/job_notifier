@@ -90,6 +90,9 @@ class ScrapeRun(Base):
     jobs_returned: Mapped[int] = mapped_column(Integer, default=0)
     jobs_new: Mapped[int] = mapped_column(Integer, default=0)
     jobs_duplicate: Mapped[int] = mapped_column(Integer, default=0)
+    scrape_target_limit: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
+    llm_compare_total: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    llm_compare_done: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class Job(Base):

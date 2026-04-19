@@ -35,7 +35,7 @@
       <nav class="nav-drawer-inner" aria-label="Site">
         <a href="/runs">Past runs</a>
         <a href="/schedules">Schedules</a>
-        <a href="/settings/advanced">Browser paths</a>
+        <a href="/settings/advanced">Settings</a>
       </nav>
     </div>
   </header>
@@ -45,5 +45,12 @@
   <footer class="site-footer">
     <p>Public listings only. Respect LinkedIn’s <a href="https://www.linkedin.com/legal/user-agreement" rel="noopener">Terms of Use</a> and applicable law. Scheduling runs only while this server process is running; use cron/systemd/launchd with <code>python -m app</code> for headless repeats.</p>
   </footer>
+  <dialog id="lmstudio-setup-dialog" class="app-dialog" aria-labelledby="lmstudio-setup-title">
+    <div class="app-dialog-inner card">
+      <h2 id="lmstudio-setup-title" class="lmstudio-dialog-heading">LM Studio</h2>
+      <div id="lmstudio-setup-body" class="lmstudio-setup-body"></div>
+      <div id="lmstudio-setup-actions" class="app-dialog-actions"></div>
+    </div>
+  </dialog>
 </body>
 </html>

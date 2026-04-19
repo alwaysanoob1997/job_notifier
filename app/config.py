@@ -211,9 +211,29 @@ def lmstudio_base_url() -> str:
     return f"http://127.0.0.1:{port}/v1"
 
 
+_DEFAULT_LMSTUDIO_MODEL = "google/gemma-4-e4b"
+
+
+def lmstudio_env_overrides_model() -> bool:
+    """True when ``LINKEDIN_LMSTUDIO_MODEL`` is set (overrides prefs file)."""
+    return bool(os.environ.get("LINKEDIN_LMSTUDIO_MODEL", "").strip())
+
+
 def lmstudio_model() -> str:
-    """Model id for chat completions and `lms unload` (must match loaded model)."""
-    return os.environ.get("LINKEDIN_LMSTUDIO_MODEL", "google/gemma-4-e4b").strip() or "google/gemma-4-e4b"
+    """Model id for chat completions and `lms unload` (must match loaded model).
+
+    Precedence: ``LINKEDIN_LMSTUDIO_MODEL`` env, then ``~/LinkedInJobs/lmstudio_prefs.json``,
+    then default ``google/gemma-4-e4b``.
+    """
+    raw = os.environ.get("LINKEDIN_LMSTUDIO_MODEL", "").strip()
+    if raw:
+        return raw
+    from app.lmstudio_prefs import get_preferred_model_id
+
+    pref = get_preferred_model_id()
+    if pref:
+        return pref
+    return _DEFAULT_LMSTUDIO_MODEL
 
 
 def lms_cli_executable() -> str:

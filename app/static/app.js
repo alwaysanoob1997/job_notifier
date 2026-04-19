@@ -562,6 +562,294 @@
     });
   }
 
+  function fetchLmstudioStatus() {
+    return fetch("/api/lmstudio/status", { credentials: "same-origin" }).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    });
+  }
+
+  function postLmstudioPreferred(modelId) {
+    return fetch("/api/lmstudio/preferences", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ preferred_model_id: modelId }),
+    }).then(function (r) {
+      return r.json().then(function (data) {
+        if (!r.ok) {
+          var d = data && data.detail;
+          throw new Error(typeof d === "string" ? d : r.statusText);
+        }
+        return data;
+      });
+    });
+  }
+
+  function fillLmstudioModelSelect(select, models, preferredId) {
+    select.innerHTML = "";
+    var ph = document.createElement("option");
+    ph.value = "";
+    ph.textContent = models.length ? "Select a model…" : "(no models downloaded)";
+    select.appendChild(ph);
+    for (var i = 0; i < models.length; i++) {
+      var o = document.createElement("option");
+      o.value = models[i];
+      o.textContent = models[i];
+      select.appendChild(o);
+    }
+    if (preferredId && models.indexOf(preferredId) >= 0) {
+      select.value = preferredId;
+    }
+  }
+
+  function initLmStudioSetupWizard() {
+    var dlg = document.getElementById("lmstudio-setup-dialog");
+    var titleEl = document.getElementById("lmstudio-setup-title");
+    var bodyEl = document.getElementById("lmstudio-setup-body");
+    var actionsEl = document.getElementById("lmstudio-setup-actions");
+    if (!dlg || !titleEl || !bodyEl || !actionsEl) return;
+
+    function clear(el) {
+      while (el.firstChild) el.removeChild(el.firstChild);
+    }
+
+    function addClose() {
+      var closeBtn = document.createElement("button");
+      closeBtn.type = "button";
+      closeBtn.className = "btn-secondary";
+      closeBtn.textContent = "Close";
+      closeBtn.addEventListener("click", function () {
+        dlg.close();
+      });
+      actionsEl.appendChild(closeBtn);
+    }
+
+    function showPicker(models, preferredId, staleNote) {
+      titleEl.textContent = "Choose a preferred model";
+      clear(bodyEl);
+      clear(actionsEl);
+      if (staleNote) {
+        var warn = document.createElement("p");
+        warn.className = "error-inline";
+        warn.textContent = staleNote;
+        bodyEl.appendChild(warn);
+      }
+      var lbl = document.createElement("label");
+      lbl.textContent = "Model";
+      var sel = document.createElement("select");
+      sel.id = "lmstudio-wizard-select";
+      sel.setAttribute("aria-label", "Preferred LM Studio model");
+      fillLmstudioModelSelect(sel, models, preferredId);
+      lbl.appendChild(sel);
+      bodyEl.appendChild(lbl);
+
+      var saveBtn = document.createElement("button");
+      saveBtn.type = "button";
+      saveBtn.className = "btn-primary";
+      saveBtn.textContent = "Save";
+      saveBtn.addEventListener("click", function () {
+        var v = (sel.value || "").trim();
+        if (!v) return;
+        saveBtn.disabled = true;
+        postLmstudioPreferred(v)
+          .then(function () {
+            dlg.close();
+          })
+          .catch(function (err) {
+            alert(err.message || String(err));
+          })
+          .finally(function () {
+            saveBtn.disabled = false;
+          });
+      });
+      actionsEl.appendChild(saveBtn);
+      addClose();
+      dlg.showModal();
+    }
+
+    fetchLmstudioStatus()
+      .then(function (st) {
+        if (st.env_overrides_model) return;
+        if (!st.cli_available) {
+          titleEl.textContent = "Install LM Studio";
+          clear(bodyEl);
+          clear(actionsEl);
+          var p1 = document.createElement("p");
+          p1.textContent =
+            "Job match scoring requires LM Studio. Install it, add the CLI to your PATH (or set LINKEDIN_LMS_CLI), then download a preferred model.";
+          bodyEl.appendChild(p1);
+          var pLink = document.createElement("p");
+          var a = document.createElement("a");
+          a.href = "https://lmstudio.ai/";
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+          a.className = "btn-primary";
+          a.textContent = "Open lmstudio.ai";
+          pLink.appendChild(a);
+          bodyEl.appendChild(pLink);
+          var p2 = document.createElement("p");
+          p2.className = "muted";
+          p2.textContent =
+            "In LM Studio, open Search / My Models and download a model (for example Gemma or Llama). Reload this page after installation.";
+          bodyEl.appendChild(p2);
+          addClose();
+          dlg.showModal();
+          return;
+        }
+        if (st.list_error) {
+          titleEl.textContent = "LM Studio";
+          clear(bodyEl);
+          clear(actionsEl);
+          var pe = document.createElement("p");
+          pe.textContent = "Could not list downloaded models:";
+          bodyEl.appendChild(pe);
+          var pre = document.createElement("pre");
+          pre.className = "lmstudio-cli-error";
+          pre.textContent = st.list_error;
+          bodyEl.appendChild(pre);
+          var ph = document.createElement("p");
+          ph.className = "muted";
+          ph.textContent = "Fix your lms CLI or PATH, then reload.";
+          bodyEl.appendChild(ph);
+          addClose();
+          dlg.showModal();
+          return;
+        }
+        var models = st.models || [];
+        if (models.length === 0) {
+          titleEl.textContent = "Download a model";
+          clear(bodyEl);
+          clear(actionsEl);
+          var p0 = document.createElement("p");
+          p0.textContent =
+            "LM Studio is installed, but no local models were found. Open LM Studio and download at least one model.";
+          bodyEl.appendChild(p0);
+          var pOpen = document.createElement("p");
+          var a2 = document.createElement("a");
+          a2.href = "https://lmstudio.ai/";
+          a2.target = "_blank";
+          a2.rel = "noopener noreferrer";
+          a2.className = "btn-primary";
+          a2.textContent = "Open lmstudio.ai";
+          pOpen.appendChild(a2);
+          bodyEl.appendChild(pOpen);
+          addClose();
+          dlg.showModal();
+          return;
+        }
+        var pref = st.preferred_model_id || "";
+        if (pref && models.indexOf(pref) >= 0) return;
+        var note =
+          pref && models.indexOf(pref) < 0
+            ? "Your saved model is no longer in the downloaded list. Pick a new one."
+            : "";
+        showPicker(models, pref, note);
+      })
+      .catch(function () {
+        /* ignore wizard errors on pages that don't need scoring */
+      });
+  }
+
+  function initLmStudioSettingsPage() {
+    var card = document.getElementById("lmstudio-settings-card");
+    if (!card) return;
+    var envEl = document.getElementById("lmstudio-settings-env");
+    var errEl = document.getElementById("lmstudio-settings-error");
+    var formWrap = document.getElementById("lmstudio-settings-form-wrap");
+    var unavailableEl = document.getElementById("lmstudio-settings-unavailable");
+    var select = document.getElementById("lmstudio-preferred-select");
+    var refreshBtn = document.getElementById("lmstudio-refresh-models");
+    var saveBtn = document.getElementById("lmstudio-save-preferred");
+    if (!select || !refreshBtn || !saveBtn || !formWrap || !unavailableEl) return;
+
+    function setError(msg) {
+      if (!errEl) return;
+      if (msg) {
+        errEl.textContent = msg;
+        errEl.hidden = false;
+      } else {
+        errEl.textContent = "";
+        errEl.hidden = true;
+      }
+    }
+
+    function applyStatus(st) {
+      setError("");
+      saveBtn.disabled = false;
+      saveBtn.title = "";
+      if (st.env_overrides_model) {
+        if (envEl) {
+          envEl.textContent =
+            "LINKEDIN_LMSTUDIO_MODEL is set in the environment; the saved preference below is ignored until you unset it.";
+          envEl.hidden = false;
+        }
+        formWrap.hidden = false;
+        unavailableEl.hidden = true;
+        saveBtn.disabled = true;
+        saveBtn.title = "Unset LINKEDIN_LMSTUDIO_MODEL to save a preference to the config file.";
+      } else {
+        if (envEl) envEl.hidden = true;
+      }
+
+      if (!st.cli_available) {
+        formWrap.hidden = true;
+        unavailableEl.hidden = false;
+        unavailableEl.textContent =
+          "LM Studio CLI (lms) was not found. Install LM Studio from lmstudio.ai and ensure lms is on your PATH, or set LINKEDIN_LMS_CLI.";
+        return;
+      }
+      unavailableEl.hidden = true;
+      formWrap.hidden = false;
+
+      if (st.list_error) {
+        setError(st.list_error);
+        fillLmstudioModelSelect(select, [], null);
+        return;
+      }
+      var models = st.models || [];
+      fillLmstudioModelSelect(select, models, st.preferred_model_id || "");
+    }
+
+    function load() {
+      fetchLmstudioStatus()
+        .then(applyStatus)
+        .catch(function (e) {
+          setError(e.message || String(e));
+        });
+    }
+
+    refreshBtn.addEventListener("click", function () {
+      refreshBtn.disabled = true;
+      load();
+      setTimeout(function () {
+        refreshBtn.disabled = false;
+      }, 400);
+    });
+
+    saveBtn.addEventListener("click", function () {
+      var v = (select.value || "").trim();
+      if (!v) {
+        setError("Select a model first.");
+        return;
+      }
+      saveBtn.disabled = true;
+      setError("");
+      postLmstudioPreferred(v)
+        .then(function () {
+          load();
+        })
+        .catch(function (err) {
+          setError(err.message || String(err));
+        })
+        .finally(function () {
+          saveBtn.disabled = false;
+        });
+    });
+
+    load();
+  }
+
   function boot() {
     initThemeToggle();
     initNavDrawer();
@@ -569,6 +857,8 @@
     initIdealJobRequirementsCard();
     initFilterSchedulePage();
     initDataTables();
+    initLmStudioSetupWizard();
+    initLmStudioSettingsPage();
   }
 
   if (document.readyState === "loading") {

@@ -1,13 +1,33 @@
 {% extends "base.html" %}
-{% block title %}Browser paths · LinkedIn Jobs{% endblock %}
+{% block title %}Settings · LinkedIn Jobs{% endblock %}
 {% block content %}
 <p><a href="/">&larr; Home</a></p>
-<h1>Browser paths</h1>
+<h1>Settings</h1>
+
+<section class="card" id="lmstudio-settings-card" aria-labelledby="lmstudio-settings-heading">
+  <h2 id="lmstudio-settings-heading">LM Studio</h2>
+  <p class="muted">Job match scoring uses a local model via LM Studio. Preferred model is stored in <code>~/LinkedInJobs/lmstudio_prefs.json</code>.</p>
+  <p id="lmstudio-settings-env" class="lmstudio-settings-msg muted" hidden></p>
+  <p id="lmstudio-settings-error" class="error-inline" hidden></p>
+  <div id="lmstudio-settings-form-wrap">
+    <label>Preferred model
+      <select id="lmstudio-preferred-select" name="lmstudio_preferred" aria-describedby="lmstudio-settings-hint"></select>
+    </label>
+    <p id="lmstudio-settings-hint" class="muted small-hint">Download models in the LM Studio app (My Models), then refresh the list.</p>
+    <div class="lmstudio-settings-actions">
+      <button type="button" class="btn-secondary" id="lmstudio-refresh-models">Refresh model list</button>
+      <button type="button" class="btn-primary" id="lmstudio-save-preferred">Save preferred model</button>
+    </div>
+  </div>
+  <p id="lmstudio-settings-unavailable" class="muted" hidden></p>
+</section>
+
+<h2 class="settings-subheading">Browser paths</h2>
 <p class="muted">Optional Chrome / Chromium paths used for all filters on this machine.</p>
 
 <form method="post" action="/settings/advanced" class="card">
   <label>ChromeDriver path <input name="chrome_executable_path" type="text" value="{{ (settings.chrome_executable_path or '') if settings else '' }}" placeholder="optional" /></label>
   <label>Chrome binary path <input name="chrome_binary_location" type="text" value="{{ (settings.chrome_binary_location or '') if settings else '' }}" placeholder="optional" /></label>
-  <button type="submit" class="btn-primary">Save</button>
+  <button type="submit" class="btn-primary">Save browser paths</button>
 </form>
 {% endblock %}

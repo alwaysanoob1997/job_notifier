@@ -664,6 +664,35 @@ p.error {
   box-shadow: var(--shadow-sm);
 }
 
+.run-progress-block {
+  margin: 0.75rem 0 0.5rem;
+}
+
+.run-progress-block.run-llm-block {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.run-progress-label {
+  margin: 0 0 0.35rem;
+  font-size: 0.9rem;
+}
+
+.run-progress-meta {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+}
+
+.run-progress-bar {
+  display: block;
+  width: 100%;
+  max-width: 28rem;
+  height: 0.65rem;
+  margin: 0.25rem 0 0;
+  accent-color: var(--mint);
+}
+
 .nav-menu-toggle {
   font-family: inherit;
   font-size: 0.85rem;
@@ -1250,4 +1279,107 @@ button.run-table-delete:disabled {
 
 .audit-run-meta {
   margin: 0.5rem 0 0;
+}
+
+/* LM Studio setup dialog + settings */
+dialog.app-dialog {
+  border: none;
+  padding: 0;
+  max-width: calc(100vw - 2rem);
+  width: min(32rem, 100%);
+  background: transparent;
+  color: inherit;
+}
+
+dialog.app-dialog::backdrop {
+  background: rgba(20, 18, 32, 0.45);
+  backdrop-filter: blur(4px);
+}
+
+[data-theme="dark"] dialog.app-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.app-dialog-inner {
+  margin: 0;
+}
+
+.app-dialog-inner.card {
+  margin-bottom: 0;
+}
+
+.lmstudio-dialog-heading {
+  margin-bottom: 0.65rem;
+}
+
+.lmstudio-setup-body {
+  margin-bottom: 1rem;
+}
+
+.lmstudio-setup-body label {
+  display: block;
+  margin-bottom: 0.85rem;
+  font-weight: 500;
+  font-size: 0.92rem;
+}
+
+.app-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}
+
+.lmstudio-cli-error {
+  font-size: 0.85rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--error-bg);
+  color: var(--error-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 10rem;
+  overflow: auto;
+}
+
+.settings-subheading {
+  margin-top: 2rem;
+  font-size: 1.15rem;
+  font-weight: 650;
+}
+
+.small-hint {
+  font-size: 0.88rem;
+  margin-top: 0.35rem;
+}
+
+.error-inline {
+  color: var(--error-text);
+  background: var(--error-bg);
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.92rem;
+}
+
+.lmstudio-settings-actions {
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+#lmstudio-settings-card select {
+  width: 100%;
+  max-width: 36rem;
+  margin-top: 0.35rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.95rem;
 }

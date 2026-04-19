@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import datetime as dt
 import json
 import logging
 import subprocess
 import time
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -48,6 +50,47 @@ _USER_TEMPLATE = """## User ideal job requirements
 Respond with JSON containing "score" (0-100 integer) and "reasoning" (string) only."""
 
 
+@dataclass
+class JobScoringSnapshot:
+    """ORM-free job fields for LLM scoring (built inside a DB session, used after it closes)."""
+
+    job_id: str
+    first_seen_run_id: int
+    created_at: dt.datetime | None
+    query: str
+    location: str
+    title: str
+    company: str
+    place: str
+    link: str
+    apply_link: str
+    description: str
+    description_html: str
+    date: str
+    date_text: str
+    salary: str
+
+
+def _job_to_snapshot(j: Job) -> JobScoringSnapshot:
+    return JobScoringSnapshot(
+        job_id=j.job_id,
+        first_seen_run_id=j.first_seen_run_id,
+        created_at=j.created_at,
+        query=j.query or "",
+        location=j.location or "",
+        title=j.title or "",
+        company=j.company or "",
+        place=j.place or "",
+        link=j.link or "",
+        apply_link=j.apply_link or "",
+        description=j.description or "",
+        description_html=j.description_html or "",
+        date=j.date or "",
+        date_text=j.date_text or "",
+        salary=j.salary or "",
+    )
+
+
 def _match_response_format() -> dict[str, Any]:
     return {
         "type": "json_schema",
@@ -67,7 +110,7 @@ def _match_response_format() -> dict[str, Any]:
     }
 
 
-def format_job_blob(job: Job) -> str:
+def format_job_blob(job: Job | JobScoringSnapshot) -> str:
     desc = (job.description or "").strip()
     if len(desc) > _MAX_DESCRIPTION_CHARS:
         desc = desc[:_MAX_DESCRIPTION_CHARS] + "\n… [truncated]"
@@ -261,6 +304,13 @@ def shutdown_lmstudio_after_inference() -> None:
         )
 
 
+def _persist_llm_compare_done(run_id: int, done: int) -> None:
+    with session_scope() as session:
+        run_row = session.get(ScrapeRun, run_id)
+        if run_row is not None:
+            run_row.llm_compare_done = done
+
+
 def score_jobs_for_run(run_id: int) -> None:
     """Score all jobs first seen in this run; optional LM Studio teardown after HTTP inference.
 
@@ -274,12 +324,17 @@ def score_jobs_for_run(run_id: int) -> None:
     notify_thr = 60
     run_title = ""
     run_loc = ""
+    ideal_text = ""
 
     with session_scope() as session:
         active = get_active_requirement(session)
         ideal_text = (active.description or "").strip() if active else ""
         if not ideal_text:
             logger.info("skip LLM scoring run_id=%s: no active ideal job requirements", run_id)
+            run_row = session.get(ScrapeRun, run_id)
+            if run_row is not None:
+                run_row.llm_compare_total = -1
+                run_row.llm_compare_done = 0
             return
         assert active is not None
         notify_to = (active.notify_email or "").strip() or None
@@ -297,14 +352,29 @@ def score_jobs_for_run(run_id: int) -> None:
                 select(Job).where(Job.first_seen_run_id == run_id).order_by(Job.job_id)
             )
         )
-        if not jobs:
-            logger.info("skip LLM scoring run_id=%s: no new jobs for this run", run_id)
-            return
+        snapshots = [_job_to_snapshot(j) for j in jobs]
 
-        start_lmstudio_server_for_scoring()
+    if not snapshots:
+        with session_scope() as session:
+            run_row = session.get(ScrapeRun, run_id)
+            if run_row is not None:
+                run_row.llm_compare_total = 0
+                run_row.llm_compare_done = 0
+        logger.info("skip LLM scoring run_id=%s: no new jobs for this run", run_id)
+        return
 
-        with httpx.Client(timeout=httpx.Timeout(300.0, connect=30.0)) as client:
-            for job in jobs:
+    start_lmstudio_server_for_scoring()
+
+    with session_scope() as session:
+        run_row = session.get(ScrapeRun, run_id)
+        if run_row is not None:
+            run_row.llm_compare_total = len(snapshots)
+            run_row.llm_compare_done = 0
+
+    done_ct = 0
+    with httpx.Client(timeout=httpx.Timeout(300.0, connect=30.0)) as client:
+        for job in snapshots:
+            try:
                 blob = format_job_blob(job)
                 user_msg = _USER_TEMPLATE.format(ideal=ideal_text, job_blob=blob)
                 messages = [
@@ -338,6 +408,9 @@ def score_jobs_for_run(run_id: int) -> None:
                             "reasoning": reasoning,
                         }
                     )
+            finally:
+                done_ct += 1
+                _persist_llm_compare_done(run_id, done_ct)
 
     if notify_to and digest_payload:
         subject = f"LinkedIn Jobs: {len(digest_payload)} match(es) ≥ {notify_thr} (run #{run_id})"

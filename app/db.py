@@ -89,6 +89,14 @@ def _migrate_sqlite_schema(engine) -> None:
             cols = _sqlite_table_columns(conn, "scrape_runs")
             if "filter_id" not in cols:
                 conn.execute(text("ALTER TABLE scrape_runs ADD COLUMN filter_id INTEGER REFERENCES job_filters(id)"))
+            if "scrape_target_limit" not in cols:
+                conn.execute(
+                    text("ALTER TABLE scrape_runs ADD COLUMN scrape_target_limit INTEGER NOT NULL DEFAULT 100")
+                )
+            if "llm_compare_total" not in cols:
+                conn.execute(text("ALTER TABLE scrape_runs ADD COLUMN llm_compare_total INTEGER"))
+            if "llm_compare_done" not in cols:
+                conn.execute(text("ALTER TABLE scrape_runs ADD COLUMN llm_compare_done INTEGER NOT NULL DEFAULT 0"))
         if "job_filters" in tables:
             jf_cols = _sqlite_table_columns(conn, "job_filters")
             if "schedule_times_json" not in jf_cols:
