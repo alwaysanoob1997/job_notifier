@@ -25,6 +25,8 @@ class LinkedinScraper:
             different Chrome driver instance.
         slow_mo (float): Slow down the scraper execution, mainly to avoid 429 (Too many requests) errors.
         page_load_timeout (int): Page load timeout.
+        job_details_wait_timeout (float): Max seconds to wait for the job details pane/description after
+            clicking a listing (guest Selenium path). Higher values help slow or background-throttled Chrome.
     """
 
     def __init__(
@@ -35,7 +37,8 @@ class LinkedinScraper:
             headless: bool = True,
             max_workers: int = 2,
             slow_mo: float = 0.5,
-            page_load_timeout=20):
+            page_load_timeout=20,
+            job_details_wait_timeout: float = 20.0):
 
         # Input validation
         if chrome_executable_path is not None and not isinstance(chrome_executable_path, str):
@@ -54,12 +57,16 @@ class LinkedinScraper:
         if (not isinstance(slow_mo, int) and not isinstance(slow_mo, float)) or slow_mo < 0:
             raise ValueError('Input parameter slow_mo must be a positive number')
 
+        if (not isinstance(job_details_wait_timeout, int) and not isinstance(job_details_wait_timeout, float)) or job_details_wait_timeout <= 0:
+            raise ValueError('Input parameter job_details_wait_timeout must be a positive number')
+
         self.chrome_executable_path = chrome_executable_path
         self.chrome_binary_location = chrome_binary_location
         self.chrome_options = chrome_options
         self.headless = headless
         self.slow_mo = slow_mo
         self.page_load_timeout = page_load_timeout
+        self.job_details_wait_timeout = float(job_details_wait_timeout)
 
         self._pool = ThreadPoolExecutor(max_workers=max_workers)
         self._strategy: Strategy

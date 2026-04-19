@@ -50,8 +50,8 @@ SELECTOR_VARIANTS: List[GuestSerpSelectors] = [
         companies='.result-card__subtitle.job-result-card__subtitle',
         places='.job-result-card__location',
         dates='time',
-        details_panel='.details-pane__content',
-        description='.description__text',
+        details_panel='.details-pane__content, .jobs-details__main-content',
+        description='.description__text, .show-more-less-html__markup',
         see_more_jobs='button.infinite-scroller__show-more-button',
     ),
     GuestSerpSelectors(
@@ -61,8 +61,8 @@ SELECTOR_VARIANTS: List[GuestSerpSelectors] = [
         companies='.base-search-card__subtitle',
         places='.job-search-card__location',
         dates='time',
-        details_panel='.details-pane__content',
-        description='.description__text',
+        details_panel='.details-pane__content, .jobs-details__main-content',
+        description='.description__text, .show-more-less-html__markup',
         see_more_jobs='button.infinite-scroller__show-more-button',
     ),
 ]
@@ -87,23 +87,31 @@ class GuestStrategy(Strategy):
             title = ''
         return is_login_challenge_url(driver.current_url, title)
 
-    @staticmethod
     def __load_job_details(
+        self,
         driver: webdriver,
         selectors: GuestSerpSelectors,
         job_id: str,
-        timeout: float = 5.0,
+        timeout: Optional[float] = None,
     ) -> object:
+        if timeout is None:
+            timeout = self.scraper.job_details_wait_timeout
         elapsed = 0.0
         sleep_time = 0.05
 
         while elapsed < timeout:
             loaded = driver.execute_script(
                 '''
+                    const jobId = (arguments[0] || '').trim();
                     const detailsPanel = document.querySelector(arguments[1]);
                     const description = document.querySelector(arguments[2]);
-                    return detailsPanel && detailsPanel.innerHTML.includes(arguments[0]) &&
-                        description && description.innerText.length > 0;
+                    if (!detailsPanel || !description || description.innerText.trim().length === 0) {
+                        return false;
+                    }
+                    if (!jobId) {
+                        return true;
+                    }
+                    return detailsPanel.innerHTML.includes(jobId);
                 ''',
                 job_id,
                 selectors.details_panel,
@@ -118,13 +126,15 @@ class GuestStrategy(Strategy):
 
         return {'success': False, 'error': 'Timeout on loading job details'}
 
-    @staticmethod
     def __load_more_jobs(
+        self,
         driver: webdriver,
         selectors: GuestSerpSelectors,
         job_links_tot: int,
-        timeout: float = 5.0,
+        timeout: Optional[float] = None,
     ) -> object:
+        if timeout is None:
+            timeout = self.scraper.job_details_wait_timeout
         elapsed = 0.0
         sleep_time = 0.05
         clicked = False

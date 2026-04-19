@@ -31,6 +31,10 @@ def get_default_driver_options(width=1472, height=828, headless=True) -> ChromeO
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--disable-accelerated-2d-canvas")
+    # Reduce timer throttling when the window is not focused (common for GUI-launched automation).
+    chrome_options.add_argument("--disable-background-timer-throttling")
+    chrome_options.add_argument("--disable-renderer-backgrounding")
+    chrome_options.add_argument("--disable-backgrounding-occluded-windows")
     # chrome_options.add_argument("--proxy-server='direct://")
     # chrome_options.add_argument("--proxy-bypass-list=*")
     chrome_options.add_argument("--allow-running-insecure-content")

@@ -122,6 +122,8 @@ def run_scrape_sync(run_id: int) -> None:
             "headless": True,
             "max_workers": 1,
             "slow_mo": 1.3,
+            # Guest Selenium path: wait longer than the old 5s default for job detail panes (slow/background Chrome).
+            "job_details_wait_timeout": 22.0,
         }
         if chrome_executable_path:
             kwargs["chrome_executable_path"] = chrome_executable_path
