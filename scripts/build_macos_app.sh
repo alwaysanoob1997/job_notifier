@@ -18,6 +18,8 @@ fi
 
 python -m pip install -r "${ROOT}/requirements.txt" -r "${ROOT}/requirements-build.txt"
 
+bash "${ROOT}/scripts/macos_app_icon_png_to_icns.sh"
+
 python -m PyInstaller --noconfirm "${ROOT}/packaging/LinkedInJobs.spec"
 
 echo ""

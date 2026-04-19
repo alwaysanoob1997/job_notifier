@@ -1,3 +1,5 @@
 # Desktop packaging (macOS). Install alongside requirements.txt when building .app.
 pyinstaller>=6.0.0
 pywebview>=5.0.0
+# Optional: regenerate packaging/calendar-clock-1024.png after editing packaging/calendar-clock.svg
+cairosvg>=2.7.0

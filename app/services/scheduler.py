@@ -107,9 +107,9 @@ def effective_daily_slots(job: JobFilter) -> list[tuple[int, int]]:
 def format_schedule_blurb(job: JobFilter) -> str:
     slots = effective_daily_slots(job)
     if not slots:
-        return "No schedule (manual runs only)"
+        return "No automatic runs"
     parts = [f"{h:02d}:{m:02d}" for h, m in slots]
-    return f"{len(parts)} local time(s): " + ", ".join(parts)
+    return "Runs at " + ", ".join(parts)
 
 
 def parse_schedule_time_values(values: list[str]) -> list[tuple[int, int]]:

@@ -6,13 +6,13 @@
 <p class="muted">{{ run.job_title }} — {{ run.location }} · {{ run.trigger }}</p>
 
 {% if blocked == "rescore_running" %}
-<p class="error">This run is still in progress. Wait until it finishes, then try regenerating LLM scores.</p>
+<p class="error">This run is still in progress. Wait until it finishes, then try rescoring.</p>
 {% endif %}
 {% if blocked == "rescore_busy" %}
-<p class="error">Requirement comparison is already running for this run. Wait until it completes.</p>
+<p class="error">Scoring is already running for this search. Wait until it finishes.</p>
 {% endif %}
 {% if rescored == "1" %}
-<p class="muted" role="status">Regenerating LLM scores and reasoning in the background. The progress bar below updates automatically; refresh this page when it finishes to see new scores in the table.</p>
+<p class="muted" role="status">Rescoring jobs in the background. The bar below updates on its own; refresh this page when it finishes to see updated scores.</p>
 {% endif %}
 
 <div
@@ -26,7 +26,7 @@
 
 <section class="card">
   <h2>New jobs this run</h2>
-  <p class="muted">Jobs whose <code>job_id</code> was not in the database before this run.</p>
+  <p class="muted">Listings that weren’t in your results before this run.</p>
   {% if new_jobs %}
   <div class="table-wrap job-grid-wrap" id="run-jobs-table-wrap">
     <div class="table-toolbar job-table-toolbar">
@@ -35,9 +35,9 @@
           type="submit"
           class="btn-secondary"
           {% if run.status == "running" %}disabled aria-disabled="true"{% endif %}
-          title="{% if run.status == 'running' %}Cannot regenerate while the scrape is still running{% else %}Re-run the LLM for all new jobs in this run{% endif %}"
-          onclick="return confirm('Re-run the LLM for every new job in this run? This overwrites existing scores and reasoning in the database for those listings. Scoring uses your current ideal job requirements (save changes on the home page first if you want a new rubric). An email may be sent if any score meets your notify threshold.');">
-          Regenerate LLM scores &amp; reasoning
+          title="{% if run.status == 'running' %}Wait until the search finishes{% else %}Score all new listings in this run again{% endif %}"
+          onclick="return confirm('Score all new listings in this run again? This replaces existing scores. Uses your current ideal job text from the home page. You may get an email if a score crosses your alert threshold.');">
+          Rescore listings
         </button>
       </form>
       <button type="button" class="btn-secondary" id="job-meta-toggle" aria-expanded="false" aria-controls="run-jobs-table-wrap">Show row meta</button>
@@ -72,9 +72,9 @@
             <td class="job-reasoning-col">{% if score_row %}<span class="job-reasoning-text">{{ score_row.reasoning }}</span>{% else %}—{% endif %}</td>
             <td class="job-meta-panel">
               <div class="job-meta-inner">
-                <div><span class="muted">Job ID</span> {{ j.job_id }}</div>
-                <div><span class="muted">Record created</span> {{ j.created_at|format_dt }}</div>
-                <div><span class="muted">Query</span> {{ j.query }}</div>
+                <div><span class="muted">Listing ID</span> {{ j.job_id }}</div>
+                <div><span class="muted">Saved</span> {{ j.created_at|format_dt }}</div>
+                <div><span class="muted">Search</span> {{ j.query }}</div>
                 <div><span class="muted">Location</span> {{ j.location }}</div>
               </div>
             </td>
@@ -85,7 +85,7 @@
     </div>
   </div>
   {% else %}
-  <p class="muted">No new job rows for this run (duplicates are not re-inserted).</p>
+  <p class="muted">No new listings this time (ones you already had are skipped).</p>
   {% endif %}
 </section>
 {% endblock %}

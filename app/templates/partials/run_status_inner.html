@@ -2,7 +2,7 @@
 <p><strong>Started:</strong> {{ run.started_at|format_dt }}{% if run.finished_at %} · <strong>Finished:</strong> {{ run.finished_at|format_dt }}{% endif %}</p>
 {% if run.status == 'running' and run.scrape_target_limit > 0 %}
 <div class="run-progress-block">
-  <p class="run-progress-label muted"><strong>Scrape progress:</strong> listings received vs configured limit (LinkedIn may return fewer).</p>
+  <p class="run-progress-label muted"><strong>Search progress:</strong> listings found so far (there may be fewer than the limit).</p>
   <progress class="run-progress-bar" max="{{ run.scrape_target_limit }}" value="{% if run.jobs_returned < run.scrape_target_limit %}{{ run.jobs_returned }}{% else %}{{ run.scrape_target_limit }}{% endif %}"></progress>
   <p class="run-progress-meta muted">{{ run.jobs_returned }} / up to {{ run.scrape_target_limit }}</p>
 </div>
@@ -10,20 +10,20 @@
 <p><strong>Returned:</strong> {{ run.jobs_returned }} · <strong>New:</strong> {{ run.jobs_new }} · <strong>Duplicates:</strong> {{ run.jobs_duplicate }}</p>
 {% if run.status == 'success' or run.llm_compare_total is not none %}
 <div class="run-progress-block run-llm-block">
-  <p class="run-progress-label"><strong>Requirement comparison (LLM)</strong></p>
+  <p class="run-progress-label"><strong>Scoring against your requirements</strong></p>
   {% if run.llm_compare_total is none %}
-  <p class="muted">Progress for this step was not recorded (older run).</p>
+  <p class="muted">This step wasn’t tracked for older runs.</p>
   {% elif run.llm_compare_total == -1 %}
-  <p class="muted">Skipped — no active ideal job requirements.</p>
+  <p class="muted">Skipped — no ideal job description saved.</p>
   {% elif run.llm_compare_total == 0 %}
-  <p class="muted">No new jobs to compare for this run.</p>
+  <p class="muted">No new listings to score this time.</p>
   {% else %}
   <progress class="run-progress-bar" max="{{ run.llm_compare_total }}" value="{% if run.llm_compare_done < run.llm_compare_total %}{{ run.llm_compare_done }}{% else %}{{ run.llm_compare_total }}{% endif %}"></progress>
-  <p class="run-progress-meta muted">Compared {{ run.llm_compare_done }} / {{ run.llm_compare_total }} job listing{% if run.llm_compare_total != 1 %}s{% endif %}{% if run.llm_compare_done >= run.llm_compare_total %} — complete{% else %} — in progress{% endif %}.</p>
+  <p class="run-progress-meta muted">Scored {{ run.llm_compare_done }} / {{ run.llm_compare_total }} listing{% if run.llm_compare_total != 1 %}s{% endif %}{% if run.llm_compare_done >= run.llm_compare_total %} — done{% else %} — in progress{% endif %}.</p>
   {% endif %}
 </div>
 {% elif run.status == 'failed' %}
-<p class="muted">Requirement comparison was not run (scrape did not succeed).</p>
+<p class="muted">Scoring didn’t run because the search didn’t finish successfully.</p>
 {% endif %}
 {% if run.error_message %}
 <pre class="error">{{ run.error_message }}</pre>

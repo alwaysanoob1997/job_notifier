@@ -1,5 +1,5 @@
 {% if not rows %}
-<p class="muted">No run times on this snapshot.</p>
+<p class="muted">No run times for this entry.</p>
 {% else %}
 <ul class="audit-run-status-list" aria-label="Run status for this saved schedule">
   {% for row in rows %}
@@ -15,5 +15,5 @@
   </li>
   {% endfor %}
 </ul>
-<p class="muted small-print audit-run-meta">Day {{ day_label|e }} · {{ tz_label|e }} · filter #{{ filter_id }}</p>
+<p class="muted small-print audit-run-meta">{{ day_label|e }} · {{ tz_label|e }} · search #{{ filter_id }}</p>
 {% endif %}

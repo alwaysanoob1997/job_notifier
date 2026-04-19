@@ -4,8 +4,8 @@
 <p><a class="btn-secondary" href="/">&larr; Home</a></p>
 <h1>Schedule history</h1>
 
-<h2 class="schedule-audit-heading">Saved schedule snapshots</h2>
-<p class="muted">Each filter keeps a <strong>single current snapshot</strong>: whenever you save new daily run times on a filter, the previous row for that filter is removed and replaced. <strong>Click a row</strong> (not Delete) to load <strong>Run 1</strong>, <strong>Run 2</strong>, … status for that snapshot’s local times — default day is the log date in the snapshot timezone. The <strong>Timezone</strong> column is the zone the app used when that row was saved (historical), not necessarily the zone in use after you change <code>.env</code>. Deleting a row here <strong>removes the automated schedule</strong> for that filter (same as deleting the schedule on the filter page) and clears the snapshot.</p>
+<h2 class="schedule-audit-heading">Saved schedules</h2>
+<p class="muted">Log of when each search is set to run automatically (updates when you save new times on the filter). <strong>Click a row</strong> for that day’s results. <strong>Delete</strong> stops automatic runs for that search. <strong>Timezone</strong> is the one in use when you saved.</p>
 
 {% if audits %}
 <div class="table-wrap">
@@ -18,7 +18,7 @@
           <th>Filter</th>
           <th>Runs</th>
           <th>Local times</th>
-          <th>Timezone <span class="muted small">(at save time)</span></th>
+          <th>Timezone <span class="muted small">(when saved)</span></th>
           <th>Job title</th>
           <th>Location</th>
           <th></th>
@@ -39,7 +39,7 @@
           <td>{{ a.logged_at|format_dt }}</td>
           <td><code>{{ a.schedule_id }}</code></td>
           <td>#{{ a.filter_id }}{% if a.filter_name %} — {{ a.filter_name|e }}{% endif %}</td>
-          <td>{{ a.runs_count }} <span class="muted">(runs_per_day {{ a.runs_per_day }})</span></td>
+          <td>{{ a.runs_count }}</td>
           <td><code>{{ a.schedule_times_json|e }}</code></td>
           <td>{{ a.timezone_name|e }}</td>
           <td>{{ a.job_title|e }}</td>
@@ -53,7 +53,7 @@
         <tr class="audit-row-slot-detail" aria-live="polite">
           <td colspan="9" class="audit-slot-td">
             <div id="audit-slot-{{ a.id }}" class="audit-slot-panel">
-              <p class="muted audit-slot-hint">Click the row above for Run 1 / Run 2 status…</p>
+              <p class="muted audit-slot-hint">Click the row above to see how each run went.</p>
             </div>
           </td>
         </tr>
@@ -63,6 +63,6 @@
   </div>
 </div>
 {% else %}
-<p class="muted">No schedule changes recorded yet. Save a filter’s scheduled runs to create an entry.</p>
+<p class="muted">Nothing here yet. Set run times on a filter to see them listed.</p>
 {% endif %}
 {% endblock %}

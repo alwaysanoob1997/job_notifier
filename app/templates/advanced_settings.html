@@ -8,7 +8,7 @@
   <summary class="ideal-job-summary">
     <span class="ideal-job-summary-inner">
       <span class="ideal-job-summary-title">System prompt</span>
-      <span class="muted small ideal-job-summary-lead">Click to view or edit. Each save stores a new version; only the latest is used for job match scoring.</span>
+      <span class="muted small ideal-job-summary-lead">Instructions the app uses when scoring jobs. Only your latest save is used.</span>
       {% if system_prompt_using_builtin %}
       <span class="muted small ideal-job-summary-meta">Using built-in default.</span>
       {% else %}
@@ -34,14 +34,14 @@
     </p>
   </form>
   <form method="post" action="/settings/system-prompt/reset" class="ideal-job-editor system-prompt-reset-form" onsubmit="return confirm('Reset to the built-in default? All saved prompt versions will be removed.');">
-    <p class="muted small">Remove custom versions and use the app’s built-in default prompt.</p>
+    <p class="muted small">Go back to the app’s built-in instructions and discard your custom versions.</p>
     <button type="submit" class="btn-secondary">Reset to default</button>
   </form>
 </details>
 
 <section class="card" id="user-config-card" aria-labelledby="user-config-heading">
   <h2 id="user-config-heading">Config</h2>
-  <p class="muted">These values are written to your <code>.env</code> file (only the fields below). Other keys you edit by hand are left unchanged.</p>
+  <p class="muted">These options are saved for this app on your computer. Other advanced settings you change by hand are left as-is.</p>
   {% if config_saved %}
   <p class="lmstudio-settings-msg muted" role="status">Config saved.</p>
   {% endif %}
@@ -49,12 +49,14 @@
   <p class="error-inline" role="alert">Catch-up gap must be a whole number of seconds.</p>
   {% elif config_error == "port" %}
   <p class="error-inline" role="alert">SMTP port must be between 1 and 65535.</p>
+  {% elif config_error == "lms_port" %}
+  <p class="error-inline" role="alert">LM Studio server port must be a number from 1 to 65535.</p>
   {% endif %}
   <form method="post" action="/settings/config" class="user-config-form">
     <label>Catch-up min gap (seconds)
       <input name="LINKEDIN_SCHEDULE_CATCHUP_MIN_GAP_SEC" type="number" min="0" step="1" value="{{ config_values['LINKEDIN_SCHEDULE_CATCHUP_MIN_GAP_SEC'] }}" />
     </label>
-    <label>Schedule timezone (IANA, e.g. Asia/Kolkata)
+    <label>Time zone for schedules (e.g. America/New_York)
       <input name="LINKEDIN_SCHEDULE_STATUS_TZ" type="text" value="{{ config_values['LINKEDIN_SCHEDULE_STATUS_TZ'] }}" placeholder="optional" autocomplete="off" />
     </label>
     <label>SMTP host
@@ -75,25 +77,39 @@
     <label>LM Studio CLI command
       <input name="LINKEDIN_LMS_CLI" type="text" value="{{ config_values['LINKEDIN_LMS_CLI'] }}" placeholder="lms" autocomplete="off" />
     </label>
+    <label>LM Studio auto-start server before scoring
+      {% set lms_auto = (config_values['LINKEDIN_LMS_AUTO_START_SERVER'] or '1')|lower %}
+      <select name="LINKEDIN_LMS_AUTO_START_SERVER" aria-describedby="hint-lms-auto-start">
+        <option value="0" {% if lms_auto not in ['1', 'true', 'yes', 'on'] %}selected{% endif %}>Off (0)</option>
+        <option value="1" {% if lms_auto in ['1', 'true', 'yes', 'on'] %}selected{% endif %}>On (1)</option>
+      </select>
+    </label>
+    <p id="hint-lms-auto-start" class="muted small-hint">When on, the app starts the LM Studio server before scoring jobs.</p>
+    <label>LM Studio server address
+      <input name="LINKEDIN_LMS_SERVER_BIND" type="text" value="{{ config_values['LINKEDIN_LMS_SERVER_BIND'] }}" placeholder="0.0.0.0" autocomplete="off" />
+    </label>
+    <label>LM Studio server port
+      <input name="LINKEDIN_LMS_SERVER_PORT" type="number" min="1" max="65535" step="1" value="{{ config_values['LINKEDIN_LMS_SERVER_PORT'] }}" />
+    </label>
     <p class="user-config-actions">
       <button type="submit" class="btn-primary">Save config</button>
     </p>
   </form>
-  <form method="post" action="/settings/config/reset" class="user-config-reset-form" onsubmit="return confirm('Reset these fields to defaults? Your SMTP password will be cleared from .env.');">
+  <form method="post" action="/settings/config/reset" class="user-config-reset-form" onsubmit="return confirm('Reset these fields to defaults? Your saved email password for sending mail will be cleared.');">
     <button type="submit" class="btn-secondary">Reset config to defaults</button>
   </form>
 </section>
 
 <section class="card" id="lmstudio-settings-card" aria-labelledby="lmstudio-settings-heading">
   <h2 id="lmstudio-settings-heading">LM Studio</h2>
-  <p class="muted">Job match scoring uses a local model via LM Studio. Preferred model is stored in <code>~/LinkedInJobs/lmstudio_prefs.json</code>.</p>
+  <p class="muted">Pick which local AI model scores job listings. Your choice is remembered on this computer.</p>
   <p id="lmstudio-settings-env" class="lmstudio-settings-msg muted" hidden></p>
   <p id="lmstudio-settings-error" class="error-inline" hidden></p>
   <div id="lmstudio-settings-form-wrap">
     <label>Preferred model
       <select id="lmstudio-preferred-select" name="lmstudio_preferred" aria-describedby="lmstudio-settings-hint"></select>
     </label>
-    <p id="lmstudio-settings-hint" class="muted small-hint">Download models in the LM Studio app (My Models), then refresh the list.</p>
+    <p id="lmstudio-settings-hint" class="muted small-hint">Download models in LM Studio first, then refresh the list.</p>
     <div class="lmstudio-settings-actions">
       <button type="button" class="btn-secondary" id="lmstudio-refresh-models">Refresh model list</button>
       <button type="button" class="btn-primary" id="lmstudio-save-preferred">Save preferred model</button>
@@ -103,7 +119,7 @@
 </section>
 
 <h2 class="settings-subheading">Browser paths</h2>
-<p class="muted">Optional Chrome / Chromium paths used for all filters on this machine.</p>
+<p class="muted">Optional Chrome paths if the app can’t find the browser on its own.</p>
 
 <form method="post" action="/settings/advanced" class="card">
   <label>ChromeDriver path <input name="chrome_executable_path" type="text" value="{{ (settings.chrome_executable_path or '') if settings else '' }}" placeholder="optional" /></label>

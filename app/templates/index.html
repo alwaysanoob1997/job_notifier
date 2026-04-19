@@ -2,13 +2,13 @@
 {% block title %}Filters · LinkedIn Jobs{% endblock %}
 {% block content %}
 <h1>Your filters</h1>
-<p class="muted">Each card is a saved search. Open a card to run manually or set a schedule.</p>
+<p class="muted">Each card is a saved job search. Open one to run it or set when it runs automatically.</p>
 
 <details class="card ideal-job-shell" id="ideal-job-shell">
   <summary class="ideal-job-summary">
     <span class="ideal-job-summary-inner">
       <span class="ideal-job-summary-title">Ideal job requirements</span>
-      <span class="muted small ideal-job-summary-lead">Describe your ideal role. Each save stores a new version; only the latest is used as active.</span>
+      <span class="muted small ideal-job-summary-lead">Describe your ideal role. Only your latest save is used to score new listings.</span>
       {% if ideal_job_active_id is not none %}
       <span class="muted small ideal-job-summary-meta">Active version #{{ ideal_job_active_id }}, last saved {{ ideal_job_active_at|format_dt }}.</span>
       {% endif %}

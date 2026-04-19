@@ -10,19 +10,19 @@
 {% endif %}
 
 <ul class="slots">
-  <li>Removes <strong>{{ ctx.daily_slot_count }}</strong> recurring scheduler job(s) (local daily run times) for this filter.</li>
+  <li>Removes <strong>{{ ctx.daily_slot_count }}</strong> automatic run time(s) for this search.</li>
   {% if ctx.schedule_audit_count > 0 %}
-  <li>Deletes <strong>{{ ctx.schedule_audit_count }}</strong> schedule log entr{{ 'y' if ctx.schedule_audit_count == 1 else 'ies' }} on the <a class="btn-secondary btn-compact" href="/schedules">Schedules</a> page that reference this filter.</li>
+  <li>Removes <strong>{{ ctx.schedule_audit_count }}</strong> entr{{ 'y' if ctx.schedule_audit_count == 1 else 'ies' }} from <a class="btn-secondary btn-compact" href="/schedules">Schedule history</a> for this search.</li>
   {% endif %}
   {% if ctx.scrape_run_count > 0 %}
-  <li>Leaves <strong>{{ ctx.scrape_run_count }}</strong> past scrape run(s) in <a class="btn-secondary btn-compact" href="/runs">Past runs</a>, but they will no longer be linked to this filter.</li>
+  <li>Keeps <strong>{{ ctx.scrape_run_count }}</strong> past run(s) under <a class="btn-secondary btn-compact" href="/runs">Past runs</a>, but they won’t be tied to this search anymore.</li>
   {% endif %}
 </ul>
 
 {% if warn_schedules %}
 <div class="callout-warn" role="status">
   <strong>Heads up</strong>
-  This filter has automated schedule data, history, or a saved job title. Deleting it stops future scheduled scrapes for these keywords and removes schedule logs tied to this filter, as described above.
+  This search has automatic runs, history, or saved details. Deleting it stops future scheduled runs and clears related history as described above.
 </div>
 {% endif %}
 

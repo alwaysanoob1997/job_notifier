@@ -496,6 +496,9 @@ def _parse_managed_config_form(
     from_s: str,
     pwd_s: str,
     cli_s: str,
+    lms_auto_start_s: str,
+    lms_bind_s: str,
+    lms_server_port_s: str,
 ) -> tuple[dict[str, str] | None, str | None]:
     gs = (gap_s or "").strip()
     try:
@@ -510,6 +513,19 @@ def _parse_managed_config_form(
         return None, "port"
     if not (1 <= port <= 65535):
         return None, "port"
+    lps = (lms_server_port_s or "").strip()
+    try:
+        lms_port = int(lps if lps else "1234")
+    except ValueError:
+        return None, "lms_port"
+    if not (1 <= lms_port <= 65535):
+        return None, "lms_port"
+    auto_raw = (lms_auto_start_s or "").strip().lower()
+    if auto_raw in ("1", "true", "yes", "on"):
+        auto_start_val = "1"
+    else:
+        auto_start_val = "0"
+    bind_val = (lms_bind_s or "").strip() or "0.0.0.0"
     updates = {
         "LINKEDIN_SCHEDULE_CATCHUP_MIN_GAP_SEC": str(gap),
         "LINKEDIN_SCHEDULE_STATUS_TZ": (tz_s or "").strip(),
@@ -519,6 +535,9 @@ def _parse_managed_config_form(
         "LINKEDIN_SMTP_FROM": (from_s or "").strip(),
         "LINKEDIN_SMTP_PASSWORD": (pwd_s or "").strip(),
         "LINKEDIN_LMS_CLI": ((cli_s or "").strip() or "lms"),
+        "LINKEDIN_LMS_AUTO_START_SERVER": auto_start_val,
+        "LINKEDIN_LMS_SERVER_BIND": bind_val,
+        "LINKEDIN_LMS_SERVER_PORT": str(lms_port),
     }
     return updates, None
 
@@ -617,6 +636,9 @@ def save_settings_config(
     LINKEDIN_SMTP_FROM: str = Form(""),
     LINKEDIN_SMTP_PASSWORD: str = Form(""),
     LINKEDIN_LMS_CLI: str = Form(""),
+    LINKEDIN_LMS_AUTO_START_SERVER: str = Form(""),
+    LINKEDIN_LMS_SERVER_BIND: str = Form(""),
+    LINKEDIN_LMS_SERVER_PORT: str = Form(""),
 ):
     parsed, err = _parse_managed_config_form(
         LINKEDIN_SCHEDULE_CATCHUP_MIN_GAP_SEC,
@@ -627,6 +649,9 @@ def save_settings_config(
         LINKEDIN_SMTP_FROM,
         LINKEDIN_SMTP_PASSWORD,
         LINKEDIN_LMS_CLI,
+        LINKEDIN_LMS_AUTO_START_SERVER,
+        LINKEDIN_LMS_SERVER_BIND,
+        LINKEDIN_LMS_SERVER_PORT,
     )
     if err is not None or parsed is None:
         return RedirectResponse(

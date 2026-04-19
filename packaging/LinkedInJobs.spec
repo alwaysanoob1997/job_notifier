@@ -10,6 +10,7 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules
 block_cipher = None
 
 _REPO_ROOT = Path(SPECPATH).resolve().parent
+_APP_ICNS = _REPO_ROOT / "packaging" / "LinkedInJobs.icns"
 
 _datas = [
     (str(_REPO_ROOT / "app" / "templates"), "app/templates"),
@@ -119,7 +120,7 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name="LinkedInJobs.app",
-    icon=None,
+    icon=str(_APP_ICNS) if _APP_ICNS.is_file() else None,
     bundle_identifier="local.linkedinjobs.desktop",
     info_plist={
         "CFBundleName": "LinkedIn Jobs",

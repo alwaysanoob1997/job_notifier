@@ -16,6 +16,9 @@ MANAGED_KEYS: tuple[str, ...] = (
     "LINKEDIN_SMTP_FROM",
     "LINKEDIN_SMTP_PASSWORD",
     "LINKEDIN_LMS_CLI",
+    "LINKEDIN_LMS_AUTO_START_SERVER",
+    "LINKEDIN_LMS_SERVER_BIND",
+    "LINKEDIN_LMS_SERVER_PORT",
 )
 
 
@@ -30,6 +33,9 @@ def default_values() -> dict[str, str]:
         "LINKEDIN_SMTP_FROM": "",
         "LINKEDIN_SMTP_PASSWORD": "",
         "LINKEDIN_LMS_CLI": "lms",
+        "LINKEDIN_LMS_AUTO_START_SERVER": "1",
+        "LINKEDIN_LMS_SERVER_BIND": "0.0.0.0",
+        "LINKEDIN_LMS_SERVER_PORT": "1234",
     }
 
 
