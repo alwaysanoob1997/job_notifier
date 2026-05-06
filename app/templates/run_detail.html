@@ -12,7 +12,13 @@
 <p class="error">Scoring is already running for this search. Wait until it finishes.</p>
 {% endif %}
 {% if rescored == "1" %}
-<p class="muted" role="status">Rescoring jobs in the background. The bar below updates on its own; refresh this page when it finishes to see updated scores.</p>
+<p class="muted" role="status">Rescoring jobs in the background. New scores appear in the table below as each listing is processed.</p>
+{% endif %}
+{% if stopped == "1" %}
+<p class="muted" role="status">Stop requested — finishing the current step. The status and table below update automatically.</p>
+{% endif %}
+{% if stopped == "not_active" %}
+<p class="muted" role="status">This run is not currently fetching or scoring, so there's nothing to stop.</p>
 {% endif %}
 
 <div
@@ -27,65 +33,6 @@
 <section class="card">
   <h2>New jobs this run</h2>
   <p class="muted">Listings that weren’t in your results before this run.</p>
-  {% if new_jobs %}
-  <div class="table-wrap job-grid-wrap" id="run-jobs-table-wrap">
-    <div class="table-toolbar job-table-toolbar">
-      <form method="post" action="{{ url_for('run_rescore', run_id=run.id) }}" class="run-rescore-form">
-        <button
-          type="submit"
-          class="btn-secondary"
-          {% if run.status == "running" %}disabled aria-disabled="true"{% endif %}
-          title="{% if run.status == 'running' %}Wait until the search finishes{% else %}Score all new listings in this run again{% endif %}"
-          onclick="return confirm('Score all new listings in this run again? This replaces existing scores. Uses your current ideal job text from the home page. You may get an email if a score crosses your alert threshold.');">
-          Rescore listings
-        </button>
-      </form>
-      <button type="button" class="btn-secondary" id="job-meta-toggle" aria-expanded="false" aria-controls="run-jobs-table-wrap">Show row meta</button>
-      <button type="button" class="btn-secondary" data-tsv-export>Export TSV</button>
-    </div>
-    <div class="table-scroll">
-      <table class="data-table job-results-grid" data-tsv-filename="run-{{ run.id }}-new-jobs">
-        <thead>
-          <tr>
-            <th>Listed</th>
-            <th>Title</th>
-            <th>Company</th>
-            <th>Place</th>
-            <th>Link</th>
-            <th>Salary</th>
-            <th>Score</th>
-            <th class="job-reasoning-col">Reasoning</th>
-            <th class="job-meta-panel">Meta</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for j in new_jobs %}
-          {% set score_row = scores_by_job_id.get(j.job_id) %}
-          <tr>
-            <td>{% if j.date %}{{ j.date }}{% elif j.date_text %}{{ j.date_text }}{% else %}—{% endif %}</td>
-            <td>{{ j.title }}</td>
-            <td>{{ j.company }}</td>
-            <td>{{ j.place }}</td>
-            <td>{% if j.link %}<a class="btn-secondary btn-compact" href="{{ j.link }}" rel="noopener" target="_blank">Listing</a>{% endif %}</td>
-            <td>{% if j.salary %}{{ j.salary }}{% else %}—{% endif %}</td>
-            <td>{% if score_row %}{{ score_row.score }}{% else %}—{% endif %}</td>
-            <td class="job-reasoning-col">{% if score_row %}<span class="job-reasoning-text">{{ score_row.reasoning }}</span>{% else %}—{% endif %}</td>
-            <td class="job-meta-panel">
-              <div class="job-meta-inner">
-                <div><span class="muted">Listing ID</span> {{ j.job_id }}</div>
-                <div><span class="muted">Saved</span> {{ j.created_at|format_dt }}</div>
-                <div><span class="muted">Search</span> {{ j.query }}</div>
-                <div><span class="muted">Location</span> {{ j.location }}</div>
-              </div>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-  {% else %}
-  <p class="muted">No new listings this time (ones you already had are skipped).</p>
-  {% endif %}
+  {% include "partials/run_jobs_table.html" %}
 </section>
 {% endblock %}

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.config import scrape_job_limit
 from app.db import session_scope
 from app.models import AppSettings, Job, JobFilter, ScrapeRun
+from app.services import run_cancel
 from app.services.job_match_scoring import start_score_jobs_for_run_background
 
 logger = logging.getLogger(__name__)
@@ -92,17 +93,25 @@ def _try_insert_job(session: Session, run_id: int, data) -> str:
 
 
 def run_scrape_sync(run_id: int) -> None:
-    """Execute LinkedIn scrape for an existing ScrapeRun row. Runs in a worker thread."""
+    """Execute LinkedIn scrape for an existing ScrapeRun row. Runs in a worker thread.
+
+    Each ``on_data`` event persists its Job row immediately so the run detail page can
+    render rows live as they arrive. Cancellation is signalled via ``run_cancel``: when
+    the user clicks Stop, ``on_data`` raises ``RunCancelled`` to abort the underlying
+    scraper library.
+    """
     from linkedin_jobs_scraper import LinkedinScraper
     from linkedin_jobs_scraper.events import Events, EventData
     from linkedin_jobs_scraper.filters import RelevanceFilters, TimeFilters
     from linkedin_jobs_scraper.query import Query, QueryOptions, QueryFilters
 
-    rows: list[EventData] = []
     errors: list[str] = []
-    collect_lock = threading.Lock()
+    counts_lock = threading.Lock()
     progress_flush_lock = threading.Lock()
+    counts = {"returned": 0, "new": 0, "duplicate": 0}
     progress_state = {"committed_n": 0, "flush_t": 0.0}
+
+    run_cancel.register(run_id)
 
     try:
         with session_scope() as session:
@@ -133,33 +142,51 @@ def run_scrape_sync(run_id: int) -> None:
         scraper = LinkedinScraper(**kwargs)
         job_limit = scrape_job_limit()
 
-        def _persist_jobs_returned_count(n: int) -> None:
+        def _persist_run_counters(returned: int, new_c: int, dup_c: int) -> None:
             try:
                 with session_scope() as session:
                     run_row = session.get(ScrapeRun, run_id)
                     if run_row is not None:
-                        run_row.jobs_returned = n
+                        run_row.jobs_returned = returned
+                        run_row.jobs_new = new_c
+                        run_row.jobs_duplicate = dup_c
             except Exception as e:
                 logger.warning("persist scrape progress failed: %s", e)
 
+        def _insert_job_now(data: EventData) -> str:
+            try:
+                with session_scope() as session:
+                    return _try_insert_job(session, run_id, data)
+            except Exception as e:
+                logger.warning("persist scraped job failed: %s", e, exc_info=True)
+                return "skipped"
+
         def on_data(data: EventData) -> None:
-            with collect_lock:
-                rows.append(data)
-                n = len(rows)
+            if run_cancel.is_cancelled(run_id):
+                raise run_cancel.RunCancelled()
+
+            kind = _insert_job_now(data)
+            with counts_lock:
+                counts["returned"] += 1
+                if kind == "new":
+                    counts["new"] += 1
+                elif kind == "duplicate":
+                    counts["duplicate"] += 1
+                snap = (counts["returned"], counts["new"], counts["duplicate"])
+
             now = time.monotonic()
             with progress_flush_lock:
-                if n - progress_state["committed_n"] < 5 and now - progress_state["flush_t"] < 1.0:
+                if (
+                    snap[0] - progress_state["committed_n"] < 5
+                    and now - progress_state["flush_t"] < 1.0
+                ):
                     return
-            with collect_lock:
-                n2 = len(rows)
-            _persist_jobs_returned_count(n2)
-            with progress_flush_lock:
-                progress_state["committed_n"] = n2
+                progress_state["committed_n"] = snap[0]
                 progress_state["flush_t"] = time.monotonic()
+            _persist_run_counters(*snap)
 
         def on_error(err: str) -> None:
-            with collect_lock:
-                errors.append(err)
+            errors.append(err)
             logger.warning("scraper error: %s", err)
 
         scraper.on(Events.DATA, on_data)
@@ -178,46 +205,57 @@ def run_scrape_sync(run_id: int) -> None:
                 ),
             )
         ]
-        scraper.run(queries)
+
+        scrape_error: Exception | None = None
+        try:
+            scraper.run(queries)
+        except Exception as e:
+            scrape_error = e
+
+        cancelled = run_cancel.is_cancelled(run_id)
+        with counts_lock:
+            final_counts = (counts["returned"], counts["new"], counts["duplicate"])
 
         with session_scope() as session:
             run = session.get(ScrapeRun, run_id)
             if run is None:
                 return
-            returned = 0
-            new_c = 0
-            dup_c = 0
-            for data in rows:
-                returned += 1
-                kind = _try_insert_job(session, run_id, data)
-                if kind == "new":
-                    new_c += 1
-                elif kind == "duplicate":
-                    dup_c += 1
-            run.jobs_returned = returned
-            run.jobs_new = new_c
-            run.jobs_duplicate = dup_c
+            run.jobs_returned = final_counts[0]
+            run.jobs_new = final_counts[1]
+            run.jobs_duplicate = final_counts[2]
             run.finished_at = dt.datetime.now(dt.timezone.utc)
-            run.status = "success"
-            if errors:
-                run.error_message = "\n".join(errors[:20])
-            else:
+            if cancelled:
+                run.status = "cancelled"
                 run.error_message = None
+            elif scrape_error is not None:
+                run.status = "failed"
+                run.error_message = str(scrape_error)
+            else:
+                run.status = "success"
+                run.error_message = "\n".join(errors[:20]) if errors else None
 
-        if not start_score_jobs_for_run_background(run_id):
-            logger.warning(
-                "LLM scoring not started after scrape run_id=%s (already in progress)",
-                run_id,
-            )
+        if cancelled:
+            logger.info("scrape cancelled by user run_id=%s; skipping LLM scoring", run_id)
+        elif scrape_error is None:
+            if not start_score_jobs_for_run_background(run_id):
+                logger.warning(
+                    "LLM scoring not started after scrape run_id=%s (already in progress)",
+                    run_id,
+                )
     except Exception as e:
         logger.exception("scrape failed")
         with session_scope() as session:
             run = session.get(ScrapeRun, run_id)
             if run is not None:
-                run.status = "failed"
+                if run_cancel.is_cancelled(run_id):
+                    run.status = "cancelled"
+                    run.error_message = None
+                else:
+                    run.status = "failed"
+                    run.error_message = str(e)
                 run.finished_at = dt.datetime.now(dt.timezone.utc)
-                run.error_message = str(e)
     finally:
+        run_cancel.discard(run_id)
         end_scrape()
 
 

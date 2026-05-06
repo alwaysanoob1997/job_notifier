@@ -693,6 +693,22 @@ table.data-table {
   font-weight: 650;
 }
 
+.status-cancelled {
+  color: var(--status-run);
+  font-weight: 650;
+}
+
+.btn-stop {
+  color: var(--status-err);
+  border-color: color-mix(in srgb, var(--status-err) 45%, var(--card-border));
+}
+
+.btn-stop:hover,
+.btn-stop:focus {
+  background: color-mix(in srgb, var(--status-err) 12%, var(--card));
+  border-color: color-mix(in srgb, var(--status-err) 65%, var(--card-border));
+}
+
 pre.error {
   background: var(--error-bg);
   color: var(--error-text);

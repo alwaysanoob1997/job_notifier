@@ -229,6 +229,8 @@
     var btn = document.getElementById("job-meta-toggle");
     var wrap = document.getElementById("run-jobs-table-wrap");
     if (!btn || !wrap) return;
+    if (btn.dataset.metaToggleBound === "1") return;
+    btn.dataset.metaToggleBound = "1";
     btn.addEventListener("click", function () {
       var open = !wrap.classList.contains("job-meta-expanded");
       wrap.classList.toggle("job-meta-expanded", open);
@@ -1166,6 +1168,14 @@
     load();
   }
 
+  function rebindAfterHtmxSwap() {
+    // The run detail page swaps the jobs table wrapper via htmx every 2s while
+    // the run is fetching/scoring. After each swap the toolbar buttons and
+    // table are fresh DOM nodes that need their listeners re-attached.
+    initJobMetaToggle();
+    initDataTables();
+  }
+
   function boot() {
     initThemeToggle();
     initNavDrawer();
@@ -1175,6 +1185,7 @@
     initFilterSchedulePage();
     initDataTables();
     initLlmProviderCard();
+    document.body.addEventListener("htmx:afterSettle", rebindAfterHtmxSwap);
   }
 
   if (document.readyState === "loading") {

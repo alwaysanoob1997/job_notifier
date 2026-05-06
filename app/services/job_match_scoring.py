@@ -18,6 +18,7 @@ from app.llm import get_active_provider
 from app.llm.base import LlmProvider
 from app.llm_score_db import JobLlmScore, session_scope_llm
 from app.models import Job, ScrapeRun
+from app.services import run_cancel
 from app.services.ideal_job_requirements import get_active_requirement
 from app.services.smtp_notify import send_plaintext_email
 from app.services.system_prompt_versions import effective_system_prompt_for_scoring
@@ -294,8 +295,13 @@ def _score_jobs_for_run_impl(run_id: int) -> None:
 
     response_format = _match_response_format()
     done_ct = 0
+    cancelled = False
+    run_cancel.register(run_id)
     try:
         for job in snapshots:
+            if run_cancel.is_cancelled(run_id):
+                cancelled = True
+                break
             try:
                 blob = format_job_blob(job)
                 user_msg = _USER_TEMPLATE.format(ideal=ideal_text, job_blob=blob)
@@ -340,6 +346,7 @@ def _score_jobs_for_run_impl(run_id: int) -> None:
                 done_ct += 1
                 _persist_llm_compare_done(run_id, done_ct)
     finally:
+        run_cancel.discard(run_id)
         try:
             provider.after_inference(had_successful_response=had_successful_llm_response)
         except Exception as e:
@@ -349,6 +356,14 @@ def _score_jobs_for_run_impl(run_id: int) -> None:
                 e,
                 exc_info=True,
             )
+
+    if cancelled:
+        logger.info("LLM scoring cancelled by user run_id=%s after %d/%d", run_id, done_ct, len(snapshots))
+        with session_scope() as session:
+            run_row = session.get(ScrapeRun, run_id)
+            if run_row is not None:
+                run_row.status = "cancelled"
+        return
 
     if notify_to and digest_payload:
         subject = f"LinkedIn Jobs: {len(digest_payload)} match(es) ≥ {notify_thr} (run #{run_id})"

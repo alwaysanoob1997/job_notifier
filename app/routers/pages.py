@@ -48,6 +48,7 @@ from app.services.schedule_day_status import (
     compute_slot_day_statuses_for_slots,
     slots_hm_from_schedule_audit,
 )
+from app.services import run_cancel
 from app.services.job_match_scoring import start_score_jobs_for_run_background
 from app.services.scrape_runner import start_scrape_if_idle_for_filter
 from app.templating import templates
@@ -492,6 +493,33 @@ def run_rescore(run_id: int, db: Session = Depends(get_db)):
     )
 
 
+def _run_is_active(run: ScrapeRun) -> bool:
+    """True while the scrape phase or LLM scoring is still working on this run."""
+    if run.status == "running":
+        return True
+    total = run.llm_compare_total
+    if total is not None and total > 0 and run.llm_compare_done < total:
+        return True
+    return False
+
+
+@router.post("/runs/{run_id}/stop", name="run_stop")
+def run_stop(run_id: int, db: Session = Depends(get_db)):
+    run = db.get(ScrapeRun, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if not _run_is_active(run):
+        return RedirectResponse(
+            url=f"/runs/{run_id}?stopped=not_active",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+    run_cancel.request_cancel(run_id)
+    return RedirectResponse(
+        url=f"/runs/{run_id}?stopped=1",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
 def _parse_managed_config_form(
     gap_s: str,
     tz_s: str,
@@ -718,6 +746,7 @@ def run_detail(
     db: Session = Depends(get_db),
     blocked: str | None = Query(None),
     rescored: str | None = Query(None),
+    stopped: str | None = Query(None),
 ):
     run = db.get(ScrapeRun, run_id)
     if run is None:
@@ -739,5 +768,37 @@ def run_detail(
             "scores_by_job_id": scores_by_job_id,
             "blocked": blocked,
             "rescored": rescored,
+            "stopped": stopped,
+            "is_active": _run_is_active(run),
         },
+    )
+
+
+@router.get("/partials/run-jobs/{run_id}", name="run_jobs_partial")
+def run_jobs_partial(request: Request, run_id: int, db: Session = Depends(get_db)):
+    run = db.get(ScrapeRun, run_id)
+    if run is None:
+        # 200 so HTMX swaps content instead of erroring; matches the run-status partial.
+        return HTMLResponse(
+            '<p class="error">This run no longer exists. <a href="/runs">Open past runs</a>.</p>',
+            headers={"Cache-Control": "no-store"},
+        )
+    new_jobs = list(
+        db.scalars(
+            select(Job)
+            .where(Job.first_seen_run_id == run_id)
+            .order_by(Job.created_at.desc())
+        )
+    )
+    scores_by_job_id = fetch_scores_for_job_ids([j.job_id for j in new_jobs])
+    return templates.TemplateResponse(
+        request,
+        "partials/run_jobs_table.html",
+        {
+            "run": run,
+            "new_jobs": new_jobs,
+            "scores_by_job_id": scores_by_job_id,
+            "is_active": _run_is_active(run),
+        },
+        headers={"Cache-Control": "no-store"},
     )
