@@ -6,9 +6,9 @@ Stored at ``~/LinkedInJobs/llm_prefs.json``. Secrets (API keys) live in ``.env``
 Schema::
 
     {
-      "provider": "lmstudio" | "openrouter" | "custom",
+      "provider": "lmstudio" | "gemini" | "custom",
       "lmstudio": {"preferred_model_id": "..."},
-      "openrouter": {"model": "..."},
+      "gemini": {"model": "..."},
       "custom": {"base_url": "http://...", "model": "..."}
     }
 
@@ -29,10 +29,10 @@ _PREFS_FILENAME = "llm_prefs.json"
 _LEGACY_FILENAME = "lmstudio_prefs.json"
 
 PROVIDER_LMSTUDIO = "lmstudio"
-PROVIDER_OPENROUTER = "openrouter"
+PROVIDER_GEMINI = "gemini"
 PROVIDER_CUSTOM = "custom"
 
-VALID_PROVIDERS: tuple[str, ...] = (PROVIDER_LMSTUDIO, PROVIDER_OPENROUTER, PROVIDER_CUSTOM)
+VALID_PROVIDERS: tuple[str, ...] = (PROVIDER_LMSTUDIO, PROVIDER_GEMINI, PROVIDER_CUSTOM)
 
 
 def prefs_file_path() -> Path:
@@ -52,7 +52,7 @@ def _empty_prefs() -> dict[str, Any]:
     return {
         "provider": PROVIDER_LMSTUDIO,
         PROVIDER_LMSTUDIO: {"preferred_model_id": ""},
-        PROVIDER_OPENROUTER: {"model": ""},
+        PROVIDER_GEMINI: {"model": ""},
         PROVIDER_CUSTOM: {"base_url": "", "model": ""},
     }
 

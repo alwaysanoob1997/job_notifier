@@ -19,7 +19,7 @@ MANAGED_KEYS: tuple[str, ...] = (
     "APP_LMS_AUTO_START_SERVER",
     "APP_LMS_SERVER_BIND",
     "APP_LMS_SERVER_PORT",
-    "APP_OPENROUTER_API_KEY",
+    "APP_GEMINI_API_KEY",
     "APP_LLM_CUSTOM_API_KEY",
 )
 
@@ -27,7 +27,7 @@ MANAGED_KEYS: tuple[str, ...] = (
 # rather than "clear", same UX as APP_SMTP_PASSWORD.
 SECRET_KEYS: tuple[str, ...] = (
     "APP_SMTP_PASSWORD",
-    "APP_OPENROUTER_API_KEY",
+    "APP_GEMINI_API_KEY",
     "APP_LLM_CUSTOM_API_KEY",
 )
 
@@ -46,7 +46,7 @@ def default_values() -> dict[str, str]:
         "APP_LMS_AUTO_START_SERVER": "1",
         "APP_LMS_SERVER_BIND": "0.0.0.0",
         "APP_LMS_SERVER_PORT": "1234",
-        "APP_OPENROUTER_API_KEY": "",
+        "APP_GEMINI_API_KEY": "",
         "APP_LLM_CUSTOM_API_KEY": "",
     }
 

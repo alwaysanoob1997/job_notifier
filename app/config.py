@@ -262,9 +262,9 @@ def lmstudio_model() -> str:
     return _DEFAULT_LMSTUDIO_MODEL
 
 
-def openrouter_api_key() -> str:
-    """API key for OpenRouter chat completions (env-only; managed via Settings → Config)."""
-    return os.environ.get("APP_OPENROUTER_API_KEY", "").strip()
+def gemini_api_key() -> str:
+    """API key for Google Gemini chat completions (env-only; managed via Settings → Config)."""
+    return os.environ.get("APP_GEMINI_API_KEY", "").strip()
 
 
 def _positive_int_env(var: str, default: int) -> int:
@@ -278,44 +278,19 @@ def _positive_int_env(var: str, default: int) -> int:
     return v if v > 0 else default
 
 
-def openrouter_free_rpm() -> int:
-    """Per-minute cap applied to free OpenRouter models (``:free`` suffix). Default 20.
+def gemini_rpm() -> int:
+    """Client-side requests-per-minute cap applied to Gemini chat completions. Default 60.
 
-    Mirrors the documented free-tier limit (https://openrouter.ai/docs/api-reference/limits).
-    Override with ``APP_OPENROUTER_FREE_RPM`` if OpenRouter changes the limit.
+    Gemini per-model rate limits vary by tier (see
+    https://ai.google.dev/gemini-api/docs/rate-limits). Override with ``APP_GEMINI_RPM``
+    when your tier allows a higher or requires a lower per-minute ceiling.
     """
-    return _positive_int_env("APP_OPENROUTER_FREE_RPM", 20)
+    return _positive_int_env("APP_GEMINI_RPM", 60)
 
 
-def openrouter_free_rpd() -> int | None:
-    """Per-day cap for free OpenRouter models, or ``None`` to auto-detect via ``/api/v1/key``.
-
-    Set ``APP_OPENROUTER_FREE_RPD`` to a positive integer to force a value (e.g. 50 or 1000).
-    Default ``None``: the provider probes the key once and picks 50 (free tier) or 1000.
-    """
-    raw = os.environ.get("APP_OPENROUTER_FREE_RPD", "").strip()
-    if not raw:
-        return None
-    try:
-        v = int(raw)
-    except ValueError:
-        return None
-    return v if v > 0 else None
-
-
-def openrouter_free_rpd_default_no_credits() -> int:
-    """Conservative daily cap when ``/api/v1/key`` is unreachable. Default 50."""
-    return _positive_int_env("APP_OPENROUTER_FREE_RPD_NO_CREDITS", 50)
-
-
-def openrouter_free_rpd_default_with_credits() -> int:
-    """Daily cap when the key has paid credits. Default 1000."""
-    return _positive_int_env("APP_OPENROUTER_FREE_RPD_WITH_CREDITS", 1000)
-
-
-def openrouter_max_retries() -> int:
-    """Number of times to retry an OpenRouter chat completion on 429. Default 2."""
-    return _positive_int_env("APP_OPENROUTER_MAX_RETRIES", 2)
+def gemini_max_retries() -> int:
+    """Number of times to retry a Gemini chat completion on 429. Default 2."""
+    return _positive_int_env("APP_GEMINI_MAX_RETRIES", 2)
 
 
 def custom_llm_api_key() -> str:

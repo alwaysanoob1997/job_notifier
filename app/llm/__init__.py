@@ -1,4 +1,4 @@
-"""LLM provider abstraction (LM Studio, OpenRouter, custom OpenAI-compatible)."""
+"""LLM provider abstraction (LM Studio, Google Gemini, custom OpenAI-compatible)."""
 
 from app.llm.base import LlmProvider
 from app.llm.registry import (

@@ -732,7 +732,7 @@
       current: "",
       supportedFilters: [],
       vendors: [],
-      freeOnly: prefs.freeOnly !== false, // default ON for OpenRouter; harmless when "free" not supported.
+      freeOnly: prefs.freeOnly !== false, // default ON for providers that surface a "free" tag; harmless when not supported.
       vendor: typeof prefs.vendor === "string" ? prefs.vendor : "",
     };
 
@@ -878,11 +878,11 @@
     var lmsUnavailableEl = document.getElementById("llm-lmstudio-unavailable");
     var lmsFilterContainer = card.querySelector('.llm-model-filters[data-provider="lmstudio"]');
 
-    var orModelSel = document.getElementById("llm-openrouter-model");
-    var orRefreshBtn = document.getElementById("llm-openrouter-refresh");
-    var orSaveBtn = document.getElementById("llm-openrouter-save");
-    var orModelsErrorEl = document.getElementById("llm-openrouter-models-error");
-    var orFilterContainer = card.querySelector('.llm-model-filters[data-provider="openrouter"]');
+    var gemModelSel = document.getElementById("llm-gemini-model");
+    var gemRefreshBtn = document.getElementById("llm-gemini-refresh");
+    var gemSaveBtn = document.getElementById("llm-gemini-save");
+    var gemModelsErrorEl = document.getElementById("llm-gemini-models-error");
+    var gemFilterContainer = card.querySelector('.llm-model-filters[data-provider="gemini"]');
 
     var customBaseInput = document.getElementById("llm-custom-base-url");
     var customModelInput = document.getElementById("llm-custom-model");
@@ -890,7 +890,7 @@
 
     var lastStatus = null;
     var lmsFilter = null;
-    var orFilter = null;
+    var gemFilter = null;
 
     function setError(msg) {
       if (msg) {
@@ -919,7 +919,7 @@
 
       var providers = st.providers || {};
       var lms = providers.lmstudio || {};
-      var or = providers.openrouter || {};
+      var gem = providers.gemini || {};
       var custom = providers.custom || {};
 
       if (lmsModelSel) {
@@ -946,20 +946,20 @@
         }
       }
 
-      if (orModelSel) {
-        if (orModelsErrorEl) {
-          if (or.list_error) {
-            orModelsErrorEl.textContent = "Could not load OpenRouter models: " + or.list_error;
-            orModelsErrorEl.hidden = false;
+      if (gemModelSel) {
+        if (gemModelsErrorEl) {
+          if (gem.list_error) {
+            gemModelsErrorEl.textContent = "Could not load Gemini models: " + gem.list_error;
+            gemModelsErrorEl.hidden = false;
           } else {
-            orModelsErrorEl.hidden = true;
+            gemModelsErrorEl.hidden = true;
           }
         }
-        renderOpenRouterModels(
-          or.models_detailed || [],
-          or.model || "",
-          or.supported_filters || [],
-          or.api_key_set ? "(no models loaded — refresh)" : "(set the OpenRouter API key first)"
+        renderGeminiModels(
+          gem.models_detailed || [],
+          gem.model || "",
+          gem.supported_filters || [],
+          gem.api_key_set ? "(no models loaded — refresh)" : "(set the Gemini API key first)"
         );
       }
 
@@ -1001,18 +1001,18 @@
       return lmsFilter;
     }
 
-    function ensureOpenRouterFilter(supportedFilters) {
-      if (!orModelSel || !orFilterContainer) return null;
-      if (!orFilter) {
-        orFilter = attachModelFilter(orFilterContainer, {
-          providerId: "openrouter",
+    function ensureGeminiFilter(supportedFilters) {
+      if (!gemModelSel || !gemFilterContainer) return null;
+      if (!gemFilter) {
+        gemFilter = attachModelFilter(gemFilterContainer, {
+          providerId: "gemini",
           supportedFilters: supportedFilters || [],
           fill: function (filteredModels, currentValue) {
-            fillModelSelect(orModelSel, filteredModels, currentValue, "(no models match the filters)");
+            fillModelSelect(gemModelSel, filteredModels, currentValue, "(no models match the filters)");
           },
         });
       }
-      return orFilter;
+      return gemFilter;
     }
 
     function renderLmStudioModels(detailed, currentValue, supportedFilters, emptyLabel) {
@@ -1031,20 +1031,20 @@
       fillModelSelect(lmsModelSel, detailed, currentValue || "", emptyLabel);
     }
 
-    function renderOpenRouterModels(detailed, currentValue, supportedFilters, emptyLabel) {
-      if (!orModelSel) return;
-      if (orFilterContainer && supportedFilters && supportedFilters.length) {
-        var f = ensureOpenRouterFilter(supportedFilters);
+    function renderGeminiModels(detailed, currentValue, supportedFilters, emptyLabel) {
+      if (!gemModelSel) return;
+      if (gemFilterContainer && supportedFilters && supportedFilters.length) {
+        var f = ensureGeminiFilter(supportedFilters);
         if (f) {
           if (!detailed.length) {
-            fillModelSelect(orModelSel, [], currentValue || "", emptyLabel);
+            fillModelSelect(gemModelSel, [], currentValue || "", emptyLabel);
             return;
           }
           f.setModels(detailed, currentValue || "", supportedFilters);
           return;
         }
       }
-      fillModelSelect(orModelSel, detailed, currentValue || "", emptyLabel);
+      fillModelSelect(gemModelSel, detailed, currentValue || "", emptyLabel);
     }
 
     function load() {
@@ -1090,20 +1090,20 @@
       });
     }
 
-    function refreshOpenRouterModels(force) {
-      if (orRefreshBtn) orRefreshBtn.disabled = true;
-      fetchProviderModels("openrouter", force ? 1 : 0)
+    function refreshGeminiModels(force) {
+      if (gemRefreshBtn) gemRefreshBtn.disabled = true;
+      fetchProviderModels("gemini", force ? 1 : 0)
         .then(function (data) {
           var models = data.models || [];
-          var current = (lastStatus && lastStatus.providers && lastStatus.providers.openrouter && lastStatus.providers.openrouter.model) || "";
+          var current = (lastStatus && lastStatus.providers && lastStatus.providers.gemini && lastStatus.providers.gemini.model) || "";
           var supported = data.supported_filters || [];
-          renderOpenRouterModels(models, current, supported, "(no models loaded — refresh)");
-          if (orModelsErrorEl) {
+          renderGeminiModels(models, current, supported, "(no models loaded — refresh)");
+          if (gemModelsErrorEl) {
             if (data.list_error) {
-              orModelsErrorEl.textContent = "Could not load OpenRouter models: " + data.list_error;
-              orModelsErrorEl.hidden = false;
+              gemModelsErrorEl.textContent = "Could not load Gemini models: " + data.list_error;
+              gemModelsErrorEl.hidden = false;
             } else {
-              orModelsErrorEl.hidden = true;
+              gemModelsErrorEl.hidden = true;
             }
           }
         })
@@ -1111,32 +1111,32 @@
           setError(err.message || String(err));
         })
         .finally(function () {
-          if (orRefreshBtn) orRefreshBtn.disabled = false;
+          if (gemRefreshBtn) gemRefreshBtn.disabled = false;
         });
     }
 
-    if (orRefreshBtn) {
-      orRefreshBtn.addEventListener("click", function () {
-        refreshOpenRouterModels(true);
+    if (gemRefreshBtn) {
+      gemRefreshBtn.addEventListener("click", function () {
+        refreshGeminiModels(true);
       });
     }
 
-    if (orSaveBtn) {
-      orSaveBtn.addEventListener("click", function () {
-        var v = (orModelSel && orModelSel.value || "").trim();
+    if (gemSaveBtn) {
+      gemSaveBtn.addEventListener("click", function () {
+        var v = (gemModelSel && gemModelSel.value || "").trim();
         if (!v) {
-          setError("Pick or refresh an OpenRouter model first.");
+          setError("Pick or refresh a Gemini model first.");
           return;
         }
-        orSaveBtn.disabled = true;
+        gemSaveBtn.disabled = true;
         setError("");
-        postLlmPreferences({ provider: "openrouter", openrouter: { model: v } })
+        postLlmPreferences({ provider: "gemini", gemini: { model: v } })
           .then(load)
           .catch(function (err) {
             setError(err.message || String(err));
           })
           .finally(function () {
-            orSaveBtn.disabled = false;
+            gemSaveBtn.disabled = false;
           });
       });
     }

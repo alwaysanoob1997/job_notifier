@@ -6,11 +6,11 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import get_db
 from app.llm import PROVIDER_IDS, all_providers, get_active_provider, get_provider
-from app.llm.openrouter import OpenRouterProvider, invalidate_models_cache
+from app.llm.gemini import invalidate_models_cache as invalidate_gemini_models_cache
 from app.llm_prefs import (
     PROVIDER_CUSTOM,
+    PROVIDER_GEMINI,
     PROVIDER_LMSTUDIO,
-    PROVIDER_OPENROUTER,
     set_active_provider_id,
     update_provider_block,
 )
@@ -23,7 +23,7 @@ class _LmStudioPrefs(BaseModel):
     model: str = Field("", max_length=2048)
 
 
-class _OpenRouterPrefs(BaseModel):
+class _GeminiPrefs(BaseModel):
     model: str = Field("", max_length=2048)
 
 
@@ -35,7 +35,7 @@ class _CustomPrefs(BaseModel):
 class LlmPreferencesBody(BaseModel):
     provider: str = Field(..., min_length=1, max_length=64)
     lmstudio: _LmStudioPrefs | None = None
-    openrouter: _OpenRouterPrefs | None = None
+    gemini: _GeminiPrefs | None = None
     custom: _CustomPrefs | None = None
 
 
@@ -75,8 +75,8 @@ def llm_preferences(body: LlmPreferencesBody):
                 )
         update_provider_block(PROVIDER_LMSTUDIO, {"preferred_model_id": model})
 
-    if body.openrouter is not None and (model := body.openrouter.model.strip()):
-        update_provider_block(PROVIDER_OPENROUTER, {"model": model})
+    if body.gemini is not None and (model := body.gemini.model.strip()):
+        update_provider_block(PROVIDER_GEMINI, {"model": model})
 
     if body.custom is not None:
         updates: dict[str, str] = {}
@@ -129,24 +129,14 @@ def _build_models_payload(provider) -> dict:
     }
 
 
-@router.get("/llm/openrouter/models")
-def llm_openrouter_models(refresh: int = 0):
-    """List OpenRouter models for the dropdown (cached for ~10 minutes).
-
-    The response carries free/paid + vendor metadata so the dropdown can offer
-    client-side filters without re-fetching when the user toggles them.
-    """
-    if refresh:
-        invalidate_models_cache()
-    return _build_models_payload(OpenRouterProvider())
-
-
 @router.get("/llm/{provider_id}/models")
 def llm_provider_models(provider_id: str, refresh: int = 0):
-    """Generic provider model list. Returns the same enriched shape as the OpenRouter route.
+    """Generic provider model list.
 
     Providers without an enumerable catalog (e.g. ``custom``) return an empty
-    ``models`` list with their ``supported_filters`` (typically empty).
+    ``models`` list with their ``supported_filters`` (typically empty). Providers
+    that cache their model list (e.g. Gemini) honour ``?refresh=1`` to force a
+    fresh fetch.
     """
     pid = (provider_id or "").strip().lower()
     if pid not in PROVIDER_IDS:
@@ -154,8 +144,8 @@ def llm_provider_models(provider_id: str, refresh: int = 0):
             status_code=404,
             detail=f"Unknown provider {pid!r}; expected one of {list(PROVIDER_IDS)}.",
         )
-    if pid == PROVIDER_OPENROUTER and refresh:
-        invalidate_models_cache()
+    if pid == PROVIDER_GEMINI and refresh:
+        invalidate_gemini_models_cache()
     return _build_models_payload(get_provider(pid))
 
 

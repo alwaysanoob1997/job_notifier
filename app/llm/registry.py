@@ -6,23 +6,23 @@ import os
 
 from app.llm.base import LlmProvider
 from app.llm.custom import CustomProvider
+from app.llm.gemini import GeminiProvider
 from app.llm.lmstudio import LmStudioProvider
-from app.llm.openrouter import OpenRouterProvider
 from app.llm_prefs import (
     PROVIDER_CUSTOM,
+    PROVIDER_GEMINI,
     PROVIDER_LMSTUDIO,
-    PROVIDER_OPENROUTER,
     get_active_provider_id,
 )
 
-PROVIDER_IDS: tuple[str, ...] = (PROVIDER_LMSTUDIO, PROVIDER_OPENROUTER, PROVIDER_CUSTOM)
+PROVIDER_IDS: tuple[str, ...] = (PROVIDER_LMSTUDIO, PROVIDER_GEMINI, PROVIDER_CUSTOM)
 
 
 def get_provider(provider_id: str) -> LlmProvider:
     if provider_id == PROVIDER_LMSTUDIO:
         return LmStudioProvider()
-    if provider_id == PROVIDER_OPENROUTER:
-        return OpenRouterProvider()
+    if provider_id == PROVIDER_GEMINI:
+        return GeminiProvider()
     if provider_id == PROVIDER_CUSTOM:
         return CustomProvider()
     raise ValueError(f"unknown provider id: {provider_id!r}")

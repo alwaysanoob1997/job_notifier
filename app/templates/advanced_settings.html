@@ -109,8 +109,8 @@
     <fieldset class="config-subsection">
       <legend>API keys</legend>
       <p class="muted small-hint">Stored only on this computer. Pair with the matching provider in the LLM provider panel below. Leave blank to keep an existing key.</p>
-      <label>OpenRouter API key
-        <input name="APP_OPENROUTER_API_KEY" type="password" value="" placeholder="{% if secrets_set['APP_OPENROUTER_API_KEY'] %}Leave blank to keep current key{% else %}Optional — needed only when using OpenRouter{% endif %}" autocomplete="off" />
+      <label>Google Gemini API key
+        <input name="APP_GEMINI_API_KEY" type="password" value="" placeholder="{% if secrets_set['APP_GEMINI_API_KEY'] %}Leave blank to keep current key{% else %}Get one at https://aistudio.google.com/apikey{% endif %}" autocomplete="off" />
       </label>
       <label>Custom endpoint API key
         <input name="APP_LLM_CUSTOM_API_KEY" type="password" value="" placeholder="{% if secrets_set['APP_LLM_CUSTOM_API_KEY'] %}Leave blank to keep current key{% else %}Optional — needed only when your custom endpoint requires auth{% endif %}" autocomplete="off" />
@@ -135,7 +135,7 @@
   <label>Provider
     <select id="llm-provider-select" aria-describedby="llm-provider-hint">
       <option value="lmstudio">LM Studio (local)</option>
-      <option value="openrouter">OpenRouter</option>
+      <option value="gemini">Google Gemini</option>
       <option value="custom">Custom endpoint</option>
     </select>
   </label>
@@ -154,16 +154,16 @@
     </div>
   </div>
 
-  <div class="llm-provider-panel" id="llm-panel-openrouter" data-provider="openrouter" hidden>
-    <div class="llm-model-filters" data-provider="openrouter"></div>
+  <div class="llm-provider-panel" id="llm-panel-gemini" data-provider="gemini" hidden>
+    <div class="llm-model-filters" data-provider="gemini"></div>
     <label>Model
-      <select id="llm-openrouter-model" aria-describedby="llm-openrouter-hint"></select>
+      <select id="llm-gemini-model" aria-describedby="llm-gemini-hint"></select>
     </label>
-    <p id="llm-openrouter-hint" class="muted small-hint">Set your OpenRouter API key in the Config form above, then refresh to load the model list. Free models follow OpenRouter's <a href="https://openrouter.ai/docs/api-reference/limits" target="_blank" rel="noopener">free-tier rate limits</a> (20 requests/min).</p>
-    <p id="llm-openrouter-models-error" class="muted small-hint" hidden></p>
+    <p id="llm-gemini-hint" class="muted small-hint">Set your Google Gemini API key in the Config form above, then refresh to load the model list. Per-model quotas follow Gemini's <a href="https://ai.google.dev/gemini-api/docs/rate-limits" target="_blank" rel="noopener">rate limits</a>; tune <code>APP_GEMINI_RPM</code> if your tier allows higher than 60 requests/min.</p>
+    <p id="llm-gemini-models-error" class="muted small-hint" hidden></p>
     <div class="llm-settings-actions">
-      <button type="button" class="btn-secondary" id="llm-openrouter-refresh">Refresh model list</button>
-      <button type="button" class="btn-primary" id="llm-openrouter-save">Save</button>
+      <button type="button" class="btn-secondary" id="llm-gemini-refresh">Refresh model list</button>
+      <button type="button" class="btn-primary" id="llm-gemini-save">Save</button>
     </div>
   </div>
 

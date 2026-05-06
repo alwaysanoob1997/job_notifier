@@ -550,7 +550,7 @@ def _parse_managed_config_form(
     lms_auto_start_s: str,
     lms_bind_s: str,
     lms_server_port_s: str,
-    openrouter_key_s: str = "",
+    gemini_key_s: str = "",
     custom_key_s: str = "",
 ) -> tuple[dict[str, str] | None, str | None]:
     gs = (gap_s or "").strip()
@@ -591,7 +591,7 @@ def _parse_managed_config_form(
         "APP_LMS_AUTO_START_SERVER": auto_start_val,
         "APP_LMS_SERVER_BIND": bind_val,
         "APP_LMS_SERVER_PORT": str(lms_port),
-        "APP_OPENROUTER_API_KEY": (openrouter_key_s or "").strip(),
+        "APP_GEMINI_API_KEY": (gemini_key_s or "").strip(),
         "APP_LLM_CUSTOM_API_KEY": (custom_key_s or "").strip(),
     }
     return updates, None
@@ -695,7 +695,7 @@ def save_settings_config(
     APP_LMS_AUTO_START_SERVER: str = Form(""),
     APP_LMS_SERVER_BIND: str = Form(""),
     APP_LMS_SERVER_PORT: str = Form(""),
-    APP_OPENROUTER_API_KEY: str = Form(""),
+    APP_GEMINI_API_KEY: str = Form(""),
     APP_LLM_CUSTOM_API_KEY: str = Form(""),
 ):
     parsed, err = _parse_managed_config_form(
@@ -710,7 +710,7 @@ def save_settings_config(
         APP_LMS_AUTO_START_SERVER,
         APP_LMS_SERVER_BIND,
         APP_LMS_SERVER_PORT,
-        APP_OPENROUTER_API_KEY,
+        APP_GEMINI_API_KEY,
         APP_LLM_CUSTOM_API_KEY,
     )
     if err is not None or parsed is None:
