@@ -22,7 +22,7 @@
         Rescore listings
       </button>
     </form>
-    {% if is_active %}
+    {% if is_active and not cancel_pending %}
     <form method="post" action="{{ url_for('run_stop', run_id=run.id) }}" class="run-stop-form">
       <button
         type="submit"
@@ -32,6 +32,8 @@
         Stop run
       </button>
     </form>
+    {% elif is_active and cancel_pending %}
+    <span class="muted run-stop-pending" role="status">Stopping…</span>
     {% endif %}
     {% if new_jobs %}
     <button type="button" class="btn-secondary" id="job-meta-toggle" aria-expanded="false" aria-controls="run-jobs-table-wrap">Show row meta</button>

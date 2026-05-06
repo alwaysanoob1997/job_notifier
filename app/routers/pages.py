@@ -494,9 +494,17 @@ def run_rescore(run_id: int, db: Session = Depends(get_db)):
 
 
 def _run_is_active(run: ScrapeRun) -> bool:
-    """True while the scrape phase or LLM scoring is still working on this run."""
+    """True while the scrape phase or LLM scoring is still working on this run.
+
+    A run that finished — successfully, by failure, or by user cancellation — is not
+    active even if scoring stopped before reaching ``llm_compare_total``. That lets
+    the Rescore button stay enabled on a cancelled run so the user can resume
+    scoring on the partial capture.
+    """
     if run.status == "running":
         return True
+    if run.status != "success":
+        return False
     total = run.llm_compare_total
     if total is not None and total > 0 and run.llm_compare_done < total:
         return True
@@ -513,7 +521,17 @@ def run_stop(run_id: int, db: Session = Depends(get_db)):
             url=f"/runs/{run_id}?stopped=not_active",
             status_code=status.HTTP_303_SEE_OTHER,
         )
-    run_cancel.request_cancel(run_id)
+    had_worker = run_cancel.request_cancel(run_id)
+    if not had_worker:
+        # No live worker — the previous scrape/score thread is gone (e.g. server restarted
+        # mid-flight). Without finalising the DB, the run would stay flagged "active" forever
+        # and the user could never re-enable Rescore. The live-worker branch keeps the older
+        # "Stopping…" UX because the running thread will set status='cancelled' itself when
+        # it observes the cancel event.
+        run.status = "cancelled"
+        if run.finished_at is None:
+            run.finished_at = datetime.now(timezone.utc)
+        db.commit()
     return RedirectResponse(
         url=f"/runs/{run_id}?stopped=1",
         status_code=status.HTTP_303_SEE_OTHER,
@@ -734,7 +752,7 @@ def run_status_partial(request: Request, run_id: int, db: Session = Depends(get_
     return templates.TemplateResponse(
         request,
         "partials/run_status_inner.html",
-        {"run": run},
+        {"run": run, "cancel_pending": run_cancel.is_cancelled(run_id)},
         headers={"Cache-Control": "no-store"},
     )
 
@@ -770,6 +788,7 @@ def run_detail(
             "rescored": rescored,
             "stopped": stopped,
             "is_active": _run_is_active(run),
+            "cancel_pending": run_cancel.is_cancelled(run_id),
         },
     )
 
@@ -799,6 +818,7 @@ def run_jobs_partial(request: Request, run_id: int, db: Session = Depends(get_db
             "new_jobs": new_jobs,
             "scores_by_job_id": scores_by_job_id,
             "is_active": _run_is_active(run),
+            "cancel_pending": run_cancel.is_cancelled(run_id),
         },
         headers={"Cache-Control": "no-store"},
     )

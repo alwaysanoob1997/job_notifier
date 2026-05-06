@@ -1,6 +1,10 @@
-<p><strong>Status:</strong> <span class="status status-{{ run.status }}">{{ run.status }}</span></p>
+{# `cancel_pending` reflects the in-memory cancel event, so the panel switches to
+   the stopped layout the instant the user clicks Stop — even before the worker
+   has finished its current LLM call and persisted ``status='cancelled'``. #}
+{% set effective_status = 'cancelled' if (cancel_pending and run.status != 'failed') else run.status %}
+<p><strong>Status:</strong> <span class="status status-{{ effective_status }}">{{ effective_status }}</span></p>
 <p><strong>Started:</strong> {{ run.started_at|format_dt }}{% if run.finished_at %} · <strong>Finished:</strong> {{ run.finished_at|format_dt }}{% endif %}</p>
-{% if run.status == 'running' and run.scrape_target_limit > 0 %}
+{% if effective_status == 'running' and run.scrape_target_limit > 0 %}
 <div class="run-progress-block">
   <p class="run-progress-label muted"><strong>Search progress:</strong> listings found so far (there may be fewer than the limit).</p>
   <progress class="run-progress-bar" max="{{ run.scrape_target_limit }}" value="{% if run.jobs_returned < run.scrape_target_limit %}{{ run.jobs_returned }}{% else %}{{ run.scrape_target_limit }}{% endif %}"></progress>
@@ -8,11 +12,11 @@
 </div>
 {% endif %}
 <p><strong>Returned:</strong> {{ run.jobs_returned }} · <strong>New:</strong> {{ run.jobs_new }} · <strong>Duplicates:</strong> {{ run.jobs_duplicate }}</p>
-{% if run.status == 'success' or run.status == 'cancelled' or run.llm_compare_total is not none %}
+{% if effective_status in ('success', 'cancelled') or run.llm_compare_total is not none %}
 <div class="run-progress-block run-llm-block">
   <p class="run-progress-label"><strong>Scoring against your requirements</strong></p>
   {% if run.llm_compare_total is none %}
-  {% if run.status == 'cancelled' %}
+  {% if effective_status == 'cancelled' %}
   <p class="muted">Stopped before scoring started — use Rescore listings to score the jobs that were captured.</p>
   {% else %}
   <p class="muted">This step wasn’t tracked for older runs.</p>
@@ -21,20 +25,26 @@
   <p class="muted">Skipped — no ideal job description saved.</p>
   {% elif run.llm_compare_total == 0 %}
   <p class="muted">No new listings to score this time.</p>
+  {% elif effective_status == 'cancelled' %}
+  <p class="run-progress-meta muted">Scored {{ run.llm_compare_done }} / {{ run.llm_compare_total }} listing{% if run.llm_compare_total != 1 %}s{% endif %} — stopped.</p>
   {% else %}
   <progress class="run-progress-bar" max="{{ run.llm_compare_total }}" value="{% if run.llm_compare_done < run.llm_compare_total %}{{ run.llm_compare_done }}{% else %}{{ run.llm_compare_total }}{% endif %}"></progress>
-  <p class="run-progress-meta muted">Scored {{ run.llm_compare_done }} / {{ run.llm_compare_total }} listing{% if run.llm_compare_total != 1 %}s{% endif %}{% if run.status == 'cancelled' and run.llm_compare_done < run.llm_compare_total %} — stopped{% elif run.llm_compare_done >= run.llm_compare_total %} — done{% else %} — in progress{% endif %}.</p>
+  <p class="run-progress-meta muted">Scored {{ run.llm_compare_done }} / {{ run.llm_compare_total }} listing{% if run.llm_compare_total != 1 %}s{% endif %}{% if run.llm_compare_done >= run.llm_compare_total %} — done{% else %} — in progress{% endif %}.</p>
   {% endif %}
 </div>
-{% elif run.status == 'failed' %}
+{% elif effective_status == 'failed' %}
 <p class="muted">Scoring didn’t run because the search didn’t finish successfully.</p>
 {% endif %}
-{% if run.status == 'cancelled' %}
+{% if effective_status == 'cancelled' %}
+{% if cancel_pending and run.status != 'cancelled' %}
+<p class="muted">Stop requested — finishing the in-flight step, then this run will be marked cancelled. Jobs already fetched are kept.</p>
+{% else %}
 <p class="muted">Stopped by user. Jobs already fetched were kept; use Rescore listings to score them.</p>
 {% endif %}
-{% if run.error_message %}
+{% endif %}
+{% if run.error_message and effective_status != 'cancelled' %}
 <pre class="error">{{ run.error_message }}</pre>
 {% endif %}
-{% if run.status == 'running' %}
+{% if effective_status == 'running' %}
 <p class="muted">Still running… this panel refreshes automatically.</p>
 {% endif %}
