@@ -1557,6 +1557,36 @@ button.schedule-icon-btn--delete:hover {
   border-top: 1px dashed var(--border);
 }
 
+.llm-model-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  margin: 0.5rem 0;
+}
+
+.llm-model-filters:empty {
+  display: none;
+}
+
+.llm-model-filter-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: normal;
+}
+
+.llm-model-filter-vendor {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: normal;
+}
+
+.llm-model-filter-vendor select {
+  margin: 0;
+}
+
 .llm-warning-banner {
   display: flex;
   flex-wrap: wrap;

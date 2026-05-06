@@ -97,14 +97,66 @@ def llm_preferences(body: LlmPreferencesBody):
     }
 
 
+def _build_models_payload(provider) -> dict:
+    """Shared response shape for ``/llm/{provider}/models`` endpoints.
+
+    Includes the structured per-model metadata, the unique vendor list (so the
+    dropdown can render a vendor filter without a second request), and the set
+    of filter capabilities the provider declares — the UI uses this to decide
+    which filter controls to render.
+    """
+    if hasattr(provider, "available_models_detailed"):
+        infos, error = provider.available_models_detailed()
+    else:
+        ids, error = provider.available_models()
+        from app.llm.base import ModelInfo, vendor_from_model_id
+
+        infos = [ModelInfo(id=mid, vendor=vendor_from_model_id(mid)) for mid in ids]
+
+    vendors_seen: list[str] = []
+    seen: set[str] = set()
+    for m in infos:
+        v = m.vendor
+        if v and v not in seen:
+            seen.add(v)
+            vendors_seen.append(v)
+
+    return {
+        "models": [m.to_dict() for m in infos],
+        "vendors": vendors_seen,
+        "supported_filters": sorted(provider.supported_filters),
+        "list_error": error,
+    }
+
+
 @router.get("/llm/openrouter/models")
 def llm_openrouter_models(refresh: int = 0):
-    """List OpenRouter models for the dropdown (cached for ~10 minutes)."""
+    """List OpenRouter models for the dropdown (cached for ~10 minutes).
+
+    The response carries free/paid + vendor metadata so the dropdown can offer
+    client-side filters without re-fetching when the user toggles them.
+    """
     if refresh:
         invalidate_models_cache()
-    provider = OpenRouterProvider()
-    models, error = provider.available_models()
-    return {"models": models, "list_error": error}
+    return _build_models_payload(OpenRouterProvider())
+
+
+@router.get("/llm/{provider_id}/models")
+def llm_provider_models(provider_id: str, refresh: int = 0):
+    """Generic provider model list. Returns the same enriched shape as the OpenRouter route.
+
+    Providers without an enumerable catalog (e.g. ``custom``) return an empty
+    ``models`` list with their ``supported_filters`` (typically empty).
+    """
+    pid = (provider_id or "").strip().lower()
+    if pid not in PROVIDER_IDS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown provider {pid!r}; expected one of {list(PROVIDER_IDS)}.",
+        )
+    if pid == PROVIDER_OPENROUTER and refresh:
+        invalidate_models_cache()
+    return _build_models_payload(get_provider(pid))
 
 
 @router.get("/runs/{run_id}")

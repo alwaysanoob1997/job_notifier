@@ -643,8 +643,8 @@
     });
   }
 
-  function fetchOpenRouterModels(refresh) {
-    var url = "/api/llm/openrouter/models" + (refresh ? "?refresh=1" : "");
+  function fetchProviderModels(providerId, refresh) {
+    var url = "/api/llm/" + encodeURIComponent(providerId) + "/models" + (refresh ? "?refresh=1" : "");
     return fetch(url, { credentials: "same-origin" }).then(function (r) {
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.json();
@@ -652,18 +652,27 @@
   }
 
   function fillModelSelect(select, models, currentValue, emptyLabel) {
+    var ids = models.map(function (m) {
+      return typeof m === "string" ? m : m.id;
+    });
     select.innerHTML = "";
     var ph = document.createElement("option");
     ph.value = "";
-    ph.textContent = models.length ? "Select a model…" : emptyLabel;
+    ph.textContent = ids.length ? "Select a model…" : emptyLabel;
     select.appendChild(ph);
     for (var i = 0; i < models.length; i++) {
+      var item = models[i];
+      var id = typeof item === "string" ? item : item.id;
+      var label = typeof item === "string" ? item : item.display_label || item.id;
+      if (typeof item !== "string" && item.is_free === true && label.indexOf(":free") < 0) {
+        label = label + " (free)";
+      }
       var o = document.createElement("option");
-      o.value = models[i];
-      o.textContent = models[i];
+      o.value = id;
+      o.textContent = label;
       select.appendChild(o);
     }
-    if (currentValue && models.indexOf(currentValue) >= 0) {
+    if (currentValue && ids.indexOf(currentValue) >= 0) {
       select.value = currentValue;
     } else if (currentValue) {
       var extra = document.createElement("option");
@@ -672,6 +681,184 @@
       select.appendChild(extra);
       select.value = currentValue;
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Reusable model-filter component
+  //
+  // attachModelFilter(container, options) renders "Free only" and/or "Vendor"
+  // controls into ``container`` based on ``options.supportedFilters``. The host
+  // calls ``setModels(detailedModelList, currentValue)`` whenever fresh data
+  // arrives; the component re-runs ``options.fill(filteredModels, currentValue)``
+  // on every change and persists user choices in ``localStorage`` per provider.
+  //
+  // Adding a new provider that supports the same filters needs no UI changes:
+  // just declare ``supported_filters`` in the Python provider and call
+  // ``attachModelFilter`` from the panel's init code.
+  // ---------------------------------------------------------------------------
+
+  var FILTER_STORAGE_PREFIX = "linkedin-automation:llm:filters:";
+
+  function loadFilterPrefs(providerId) {
+    try {
+      var raw = localStorage.getItem(FILTER_STORAGE_PREFIX + providerId);
+      if (!raw) return {};
+      var parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveFilterPrefs(providerId, prefs) {
+    try {
+      localStorage.setItem(FILTER_STORAGE_PREFIX + providerId, JSON.stringify(prefs));
+    } catch (_) {
+      // Ignored: localStorage may be disabled.
+    }
+  }
+
+  function attachModelFilter(container, options) {
+    if (!container) return null;
+    container.innerHTML = "";
+    var providerId = options.providerId;
+    var supported = options.supportedFilters || [];
+    var prefs = loadFilterPrefs(providerId);
+
+    var state = {
+      models: [],
+      current: "",
+      supportedFilters: [],
+      vendors: [],
+      freeOnly: prefs.freeOnly !== false, // default ON for OpenRouter; harmless when "free" not supported.
+      vendor: typeof prefs.vendor === "string" ? prefs.vendor : "",
+    };
+
+    // Free-only checkbox
+    var freeWrap = null;
+    var freeInput = null;
+    if (supported.indexOf("free") >= 0) {
+      freeWrap = document.createElement("label");
+      freeWrap.className = "llm-model-filter-checkbox";
+      freeInput = document.createElement("input");
+      freeInput.type = "checkbox";
+      freeInput.checked = !!state.freeOnly;
+      freeWrap.appendChild(freeInput);
+      var freeText = document.createElement("span");
+      freeText.textContent = " Free models only";
+      freeWrap.appendChild(freeText);
+      container.appendChild(freeWrap);
+    } else {
+      state.freeOnly = false;
+    }
+
+    // Vendor select
+    var vendorWrap = null;
+    var vendorSelect = null;
+    if (supported.indexOf("vendor") >= 0) {
+      vendorWrap = document.createElement("label");
+      vendorWrap.className = "llm-model-filter-vendor";
+      var vendorText = document.createElement("span");
+      vendorText.textContent = "Vendor: ";
+      vendorWrap.appendChild(vendorText);
+      vendorSelect = document.createElement("select");
+      vendorWrap.appendChild(vendorSelect);
+      container.appendChild(vendorWrap);
+    } else {
+      state.vendor = "";
+    }
+
+    function persist() {
+      saveFilterPrefs(providerId, {
+        freeOnly: !!state.freeOnly,
+        vendor: state.vendor || "",
+      });
+    }
+
+    function applyFilters() {
+      var filtered = state.models.filter(function (m) {
+        if (state.freeOnly && supported.indexOf("free") >= 0) {
+          if (m.is_free !== true) return false;
+        }
+        if (state.vendor && supported.indexOf("vendor") >= 0) {
+          if ((m.vendor || "") !== state.vendor) return false;
+        }
+        return true;
+      });
+      options.fill(filtered, state.current);
+    }
+
+    function rebuildVendorOptions() {
+      if (!vendorSelect) return;
+      var pool = state.models;
+      if (state.freeOnly && supported.indexOf("free") >= 0) {
+        pool = pool.filter(function (m) { return m.is_free === true; });
+      }
+      var seen = {};
+      var vendors = [];
+      pool.forEach(function (m) {
+        var v = m.vendor || "";
+        if (v && !seen[v]) {
+          seen[v] = true;
+          vendors.push(v);
+        }
+      });
+      vendors.sort(function (a, b) { return a.localeCompare(b); });
+
+      var prevValue = state.vendor;
+      vendorSelect.innerHTML = "";
+      var allOpt = document.createElement("option");
+      allOpt.value = "";
+      allOpt.textContent = "All vendors";
+      vendorSelect.appendChild(allOpt);
+      vendors.forEach(function (v) {
+        var o = document.createElement("option");
+        o.value = v;
+        o.textContent = v;
+        vendorSelect.appendChild(o);
+      });
+      if (prevValue && vendors.indexOf(prevValue) >= 0) {
+        vendorSelect.value = prevValue;
+      } else {
+        vendorSelect.value = "";
+        state.vendor = "";
+      }
+    }
+
+    if (freeInput) {
+      freeInput.addEventListener("change", function () {
+        state.freeOnly = !!freeInput.checked;
+        persist();
+        rebuildVendorOptions();
+        applyFilters();
+      });
+    }
+
+    if (vendorSelect) {
+      vendorSelect.addEventListener("change", function () {
+        state.vendor = vendorSelect.value || "";
+        persist();
+        applyFilters();
+      });
+    }
+
+    return {
+      setModels: function (models, currentValue, supportedFilters) {
+        state.models = Array.isArray(models) ? models.slice() : [];
+        state.current = currentValue || "";
+        if (Array.isArray(supportedFilters)) {
+          state.supportedFilters = supportedFilters;
+        }
+        rebuildVendorOptions();
+        applyFilters();
+      },
+      getState: function () {
+        return {
+          freeOnly: state.freeOnly,
+          vendor: state.vendor,
+        };
+      },
+    };
   }
 
   function initLlmProviderCard() {
@@ -687,17 +874,21 @@
     var lmsRefreshBtn = document.getElementById("llm-lmstudio-refresh");
     var lmsSaveBtn = document.getElementById("llm-lmstudio-save");
     var lmsUnavailableEl = document.getElementById("llm-lmstudio-unavailable");
+    var lmsFilterContainer = card.querySelector('.llm-model-filters[data-provider="lmstudio"]');
 
     var orModelSel = document.getElementById("llm-openrouter-model");
     var orRefreshBtn = document.getElementById("llm-openrouter-refresh");
     var orSaveBtn = document.getElementById("llm-openrouter-save");
     var orModelsErrorEl = document.getElementById("llm-openrouter-models-error");
+    var orFilterContainer = card.querySelector('.llm-model-filters[data-provider="openrouter"]');
 
     var customBaseInput = document.getElementById("llm-custom-base-url");
     var customModelInput = document.getElementById("llm-custom-model");
     var customSaveBtn = document.getElementById("llm-custom-save");
 
     var lastStatus = null;
+    var lmsFilter = null;
+    var orFilter = null;
 
     function setError(msg) {
       if (msg) {
@@ -736,7 +927,7 @@
               "LM Studio CLI (lms) was not found. Install LM Studio from lmstudio.ai and ensure lms is on your PATH, or set APP_LMS_CLI.";
             lmsUnavailableEl.hidden = false;
           }
-          fillModelSelect(lmsModelSel, [], lms.model || "", "(LM Studio CLI not found)");
+          renderLmStudioModels([], lms.model || "", lms.supported_filters || [], "(LM Studio CLI not found)");
           if (lmsSaveBtn) lmsSaveBtn.disabled = true;
         } else {
           if (lmsUnavailableEl) lmsUnavailableEl.hidden = true;
@@ -744,7 +935,12 @@
           if (lms.list_error) {
             setError("LM Studio: " + lms.list_error);
           }
-          fillModelSelect(lmsModelSel, lms.models || [], lms.model || "", "(no models downloaded)");
+          renderLmStudioModels(
+            lms.models_detailed || [],
+            lms.model || "",
+            lms.supported_filters || [],
+            "(no models downloaded)"
+          );
         }
       }
 
@@ -757,10 +953,10 @@
             orModelsErrorEl.hidden = true;
           }
         }
-        fillModelSelect(
-          orModelSel,
-          or.models || [],
+        renderOpenRouterModels(
+          or.models_detailed || [],
           or.model || "",
+          or.supported_filters || [],
           or.api_key_set ? "(no models loaded — refresh)" : "(set the OpenRouter API key first)"
         );
       }
@@ -787,6 +983,66 @@
             " — not fully configured yet."
         );
       }
+    }
+
+    function ensureLmStudioFilter(supportedFilters) {
+      if (!lmsModelSel || !lmsFilterContainer) return null;
+      if (!lmsFilter) {
+        lmsFilter = attachModelFilter(lmsFilterContainer, {
+          providerId: "lmstudio",
+          supportedFilters: supportedFilters || [],
+          fill: function (filteredModels, currentValue) {
+            fillModelSelect(lmsModelSel, filteredModels, currentValue, "(no models downloaded)");
+          },
+        });
+      }
+      return lmsFilter;
+    }
+
+    function ensureOpenRouterFilter(supportedFilters) {
+      if (!orModelSel || !orFilterContainer) return null;
+      if (!orFilter) {
+        orFilter = attachModelFilter(orFilterContainer, {
+          providerId: "openrouter",
+          supportedFilters: supportedFilters || [],
+          fill: function (filteredModels, currentValue) {
+            fillModelSelect(orModelSel, filteredModels, currentValue, "(no models match the filters)");
+          },
+        });
+      }
+      return orFilter;
+    }
+
+    function renderLmStudioModels(detailed, currentValue, supportedFilters, emptyLabel) {
+      if (!lmsModelSel) return;
+      if (lmsFilterContainer && supportedFilters && supportedFilters.length) {
+        var f = ensureLmStudioFilter(supportedFilters);
+        if (f) {
+          if (!detailed.length) {
+            fillModelSelect(lmsModelSel, [], currentValue || "", emptyLabel);
+            return;
+          }
+          f.setModels(detailed, currentValue || "", supportedFilters);
+          return;
+        }
+      }
+      fillModelSelect(lmsModelSel, detailed, currentValue || "", emptyLabel);
+    }
+
+    function renderOpenRouterModels(detailed, currentValue, supportedFilters, emptyLabel) {
+      if (!orModelSel) return;
+      if (orFilterContainer && supportedFilters && supportedFilters.length) {
+        var f = ensureOpenRouterFilter(supportedFilters);
+        if (f) {
+          if (!detailed.length) {
+            fillModelSelect(orModelSel, [], currentValue || "", emptyLabel);
+            return;
+          }
+          f.setModels(detailed, currentValue || "", supportedFilters);
+          return;
+        }
+      }
+      fillModelSelect(orModelSel, detailed, currentValue || "", emptyLabel);
     }
 
     function load() {
@@ -834,11 +1090,12 @@
 
     function refreshOpenRouterModels(force) {
       if (orRefreshBtn) orRefreshBtn.disabled = true;
-      fetchOpenRouterModels(force ? 1 : 0)
+      fetchProviderModels("openrouter", force ? 1 : 0)
         .then(function (data) {
           var models = data.models || [];
           var current = (lastStatus && lastStatus.providers && lastStatus.providers.openrouter && lastStatus.providers.openrouter.model) || "";
-          fillModelSelect(orModelSel, models, current, "(no models loaded — refresh)");
+          var supported = data.supported_filters || [];
+          renderOpenRouterModels(models, current, supported, "(no models loaded — refresh)");
           if (orModelsErrorEl) {
             if (data.list_error) {
               orModelsErrorEl.textContent = "Could not load OpenRouter models: " + data.list_error;

@@ -142,6 +142,7 @@
   <p id="llm-provider-hint" class="muted small-hint">Only one provider is active at a time. Switching providers does not delete the others' settings.</p>
 
   <div class="llm-provider-panel" id="llm-panel-lmstudio" data-provider="lmstudio" hidden>
+    <div class="llm-model-filters" data-provider="lmstudio"></div>
     <label>Preferred model
       <select id="llm-lmstudio-model" aria-describedby="llm-lmstudio-hint"></select>
     </label>
@@ -154,10 +155,11 @@
   </div>
 
   <div class="llm-provider-panel" id="llm-panel-openrouter" data-provider="openrouter" hidden>
+    <div class="llm-model-filters" data-provider="openrouter"></div>
     <label>Model
       <select id="llm-openrouter-model" aria-describedby="llm-openrouter-hint"></select>
     </label>
-    <p id="llm-openrouter-hint" class="muted small-hint">Set your OpenRouter API key in the Config form above, then refresh to load the model list.</p>
+    <p id="llm-openrouter-hint" class="muted small-hint">Set your OpenRouter API key in the Config form above, then refresh to load the model list. Free models follow OpenRouter's <a href="https://openrouter.ai/docs/api-reference/limits" target="_blank" rel="noopener">free-tier rate limits</a> (20 requests/min).</p>
     <p id="llm-openrouter-models-error" class="muted small-hint" hidden></p>
     <div class="llm-settings-actions">
       <button type="button" class="btn-secondary" id="llm-openrouter-refresh">Refresh model list</button>

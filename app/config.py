@@ -267,6 +267,57 @@ def openrouter_api_key() -> str:
     return os.environ.get("APP_OPENROUTER_API_KEY", "").strip()
 
 
+def _positive_int_env(var: str, default: int) -> int:
+    raw = os.environ.get(var, "").strip()
+    if not raw:
+        return default
+    try:
+        v = int(raw)
+    except ValueError:
+        return default
+    return v if v > 0 else default
+
+
+def openrouter_free_rpm() -> int:
+    """Per-minute cap applied to free OpenRouter models (``:free`` suffix). Default 20.
+
+    Mirrors the documented free-tier limit (https://openrouter.ai/docs/api-reference/limits).
+    Override with ``APP_OPENROUTER_FREE_RPM`` if OpenRouter changes the limit.
+    """
+    return _positive_int_env("APP_OPENROUTER_FREE_RPM", 20)
+
+
+def openrouter_free_rpd() -> int | None:
+    """Per-day cap for free OpenRouter models, or ``None`` to auto-detect via ``/api/v1/key``.
+
+    Set ``APP_OPENROUTER_FREE_RPD`` to a positive integer to force a value (e.g. 50 or 1000).
+    Default ``None``: the provider probes the key once and picks 50 (free tier) or 1000.
+    """
+    raw = os.environ.get("APP_OPENROUTER_FREE_RPD", "").strip()
+    if not raw:
+        return None
+    try:
+        v = int(raw)
+    except ValueError:
+        return None
+    return v if v > 0 else None
+
+
+def openrouter_free_rpd_default_no_credits() -> int:
+    """Conservative daily cap when ``/api/v1/key`` is unreachable. Default 50."""
+    return _positive_int_env("APP_OPENROUTER_FREE_RPD_NO_CREDITS", 50)
+
+
+def openrouter_free_rpd_default_with_credits() -> int:
+    """Daily cap when the key has paid credits. Default 1000."""
+    return _positive_int_env("APP_OPENROUTER_FREE_RPD_WITH_CREDITS", 1000)
+
+
+def openrouter_max_retries() -> int:
+    """Number of times to retry an OpenRouter chat completion on 429. Default 2."""
+    return _positive_int_env("APP_OPENROUTER_MAX_RETRIES", 2)
+
+
 def custom_llm_api_key() -> str:
     """Optional bearer token for the user-configured custom OpenAI-compatible endpoint."""
     return os.environ.get("APP_LLM_CUSTOM_API_KEY", "").strip()

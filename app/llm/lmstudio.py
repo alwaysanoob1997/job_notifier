@@ -36,6 +36,10 @@ _LMS_SUBPROCESS_TIMEOUT = 120
 class LmStudioProvider(LlmProvider):
     id: ClassVar[str] = PROVIDER_LMSTUDIO
     display_name: ClassVar[str] = "LM Studio (local)"
+    # LM Studio model ids follow ``vendor/repo-name`` (e.g. ``google/gemma-3-...``).
+    # No "free" filter: all local models are free in the financial sense, so the
+    # checkbox would not narrow anything.
+    supported_filters: ClassVar[frozenset[str]] = frozenset({"vendor"})
 
     def model(self) -> str:
         return lmstudio_model()
