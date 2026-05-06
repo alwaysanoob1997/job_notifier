@@ -24,3 +24,20 @@ def format_dt(value: object) -> str:
 
 
 templates.env.filters["format_dt"] = format_dt
+
+
+def llm_is_configured() -> bool:
+    """Jinja global: True when the active LLM provider can score jobs.
+
+    Imported lazily to avoid pulling httpx into module-import time and to keep tests that
+    monkeypatch ``app.llm`` working without provider-package side effects at import.
+    """
+    try:
+        from app.llm import get_active_provider
+
+        return get_active_provider().is_configured()
+    except Exception:
+        return False
+
+
+templates.env.globals["llm_is_configured"] = llm_is_configured

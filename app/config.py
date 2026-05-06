@@ -64,7 +64,7 @@ def linkedin_jobs_dir() -> Path:
 
 
 def database_url() -> str:
-    override = os.environ.get("LINKEDIN_JOBS_DB_URL")
+    override = os.environ.get("APP_JOBS_DB_URL")
     if override:
         return override
     path = linkedin_jobs_dir() / "jobs.db"
@@ -80,11 +80,11 @@ def ensure_data_dir() -> Path:
 def schedule_status_tzinfo():
     """IANA zone for cron triggers, missed-slot reconciliation, and datetime display in templates.
 
-    Set LINKEDIN_SCHEDULE_STATUS_TZ (e.g. Asia/Kolkata) when the OS reports UTC to Python but you
+    Set APP_SCHEDULE_STATUS_TZ (e.g. Asia/Kolkata) when the OS reports UTC to Python but you
     want wall-clock schedules elsewhere (typical on WSL). If unset, uses tzlocal.get_localzone()
     (respects TZ when the platform does).
     """
-    raw = os.environ.get("LINKEDIN_SCHEDULE_STATUS_TZ", "").strip()
+    raw = os.environ.get("APP_SCHEDULE_STATUS_TZ", "").strip()
     if raw:
         try:
             from zoneinfo import ZoneInfo
@@ -92,7 +92,7 @@ def schedule_status_tzinfo():
             return ZoneInfo(raw)
         except Exception as e:
             _logger.warning(
-                "Invalid LINKEDIN_SCHEDULE_STATUS_TZ=%r (%s); falling back to system local zone.",
+                "Invalid APP_SCHEDULE_STATUS_TZ=%r (%s); falling back to system local zone.",
                 raw,
                 e,
             )
@@ -103,7 +103,7 @@ def schedule_status_tzinfo():
 
 def llm_scores_database_url() -> str:
     """SQLite URL for job LLM scores (separate file from main jobs.db)."""
-    override = os.environ.get("LINKEDIN_LLM_SCORES_DB_URL", "").strip()
+    override = os.environ.get("APP_LLM_SCORES_DB_URL", "").strip()
     if override:
         return override
     path = linkedin_jobs_dir() / "job_llm_scores.db"
@@ -173,7 +173,7 @@ def lmstudio_http_port() -> int:
     p = lms_server_start_port()
     if p is not None:
         return p
-    raw = os.environ.get("LINKEDIN_LMSTUDIO_PORT", "").strip()
+    raw = os.environ.get("APP_LMSTUDIO_PORT", "").strip()
     if raw:
         try:
             n = int(raw)
@@ -185,7 +185,7 @@ def lmstudio_http_port() -> int:
 
 
 def _normalize_windows_host_env(raw: str) -> str:
-    """Allow ``172.x.x.x`` or accidental ``http://172.x.x.x:1234`` in LINKEDIN_LMSTUDIO_WINDOWS_HOST."""
+    """Allow ``172.x.x.x`` or accidental ``http://172.x.x.x:1234`` in APP_LMSTUDIO_WINDOWS_HOST."""
     h = raw.strip()
     for prefix in ("http://", "https://"):
         if h.lower().startswith(prefix):
@@ -200,25 +200,25 @@ def lmstudio_base_url() -> str:
     """OpenAI-compatible API root (LM Studio default).
 
     Under WSL with LM Studio on **Windows**, ``127.0.0.1`` is Linux-only. When
-    ``LINKEDIN_LMSTUDIO_BASE_URL`` is unset we pick a Windows-reachable host in order:
+    ``APP_LMSTUDIO_BASE_URL`` is unset we pick a Windows-reachable host in order:
 
-    1. ``LINKEDIN_LMSTUDIO_WINDOWS_HOST`` (copy from LM Studio server log if needed)
+    1. ``APP_LMSTUDIO_WINDOWS_HOST`` (copy from LM Studio server log if needed)
     2. Default gateway from ``ip route show default`` (usually matches the log, e.g. ``172.20.x.1``)
     3. First ``nameserver`` in ``/etc/resolv.conf`` (can be wrong vs. LM Studio's bind address)
 
-    Port comes from ``LINKEDIN_LMS_SERVER_PORT``, ``LINKEDIN_LMSTUDIO_PORT``, or ``1234``.
-    Set ``LINKEDIN_LMSTUDIO_WSL_AUTODISCOVER=0`` for ``127.0.0.1`` (LM Studio inside Linux on WSL).
+    Port comes from ``APP_LMS_SERVER_PORT``, ``APP_LMSTUDIO_PORT``, or ``1234``.
+    Set ``APP_LMSTUDIO_WSL_AUTODISCOVER=0`` for ``127.0.0.1`` (LM Studio inside Linux on WSL).
     """
     global _lmstudio_wsl_url_logged
-    raw = os.environ.get("LINKEDIN_LMSTUDIO_BASE_URL", "").strip().rstrip("/")
+    raw = os.environ.get("APP_LMSTUDIO_BASE_URL", "").strip().rstrip("/")
     if raw:
         return raw
     port = lmstudio_http_port()
-    autodiscover = os.environ.get("LINKEDIN_LMSTUDIO_WSL_AUTODISCOVER", "1").strip().lower()
+    autodiscover = os.environ.get("APP_LMSTUDIO_WSL_AUTODISCOVER", "1").strip().lower()
     if autodiscover in ("0", "false", "no", "off"):
         return f"http://127.0.0.1:{port}/v1"
     if _is_wsl():
-        win_host_raw = os.environ.get("LINKEDIN_LMSTUDIO_WINDOWS_HOST", "").strip()
+        win_host_raw = os.environ.get("APP_LMSTUDIO_WINDOWS_HOST", "").strip()
         if win_host_raw:
             wh = _normalize_windows_host_env(win_host_raw)
         else:
@@ -228,7 +228,7 @@ def lmstudio_base_url() -> str:
             if not _lmstudio_wsl_url_logged:
                 _logger.info(
                     "LM Studio base URL (WSL → Windows): %s "
-                    "(override with LINKEDIN_LMSTUDIO_BASE_URL or LINKEDIN_LMSTUDIO_WINDOWS_HOST)",
+                    "(override with APP_LMSTUDIO_BASE_URL or APP_LMSTUDIO_WINDOWS_HOST)",
                     url,
                 )
                 _lmstudio_wsl_url_logged = True
@@ -240,20 +240,21 @@ _DEFAULT_LMSTUDIO_MODEL = "google/gemma-4-e4b"
 
 
 def lmstudio_env_overrides_model() -> bool:
-    """True when ``LINKEDIN_LMSTUDIO_MODEL`` is set (overrides prefs file)."""
-    return bool(os.environ.get("LINKEDIN_LMSTUDIO_MODEL", "").strip())
+    """True when ``APP_LMSTUDIO_MODEL`` is set (overrides prefs file)."""
+    return bool(os.environ.get("APP_LMSTUDIO_MODEL", "").strip())
 
 
 def lmstudio_model() -> str:
     """Model id for chat completions and `lms unload` (must match loaded model).
 
-    Precedence: ``LINKEDIN_LMSTUDIO_MODEL`` env, then ``~/LinkedInJobs/lmstudio_prefs.json``,
-    then default ``google/gemma-4-e4b``.
+    Precedence: ``APP_LMSTUDIO_MODEL`` env, then ``~/LinkedInJobs/llm_prefs.json``
+    (legacy ``lmstudio_prefs.json`` is migrated transparently), then default
+    ``google/gemma-4-e4b``.
     """
-    raw = os.environ.get("LINKEDIN_LMSTUDIO_MODEL", "").strip()
+    raw = os.environ.get("APP_LMSTUDIO_MODEL", "").strip()
     if raw:
         return raw
-    from app.lmstudio_prefs import get_preferred_model_id
+    from app.llm_prefs import get_preferred_model_id
 
     pref = get_preferred_model_id()
     if pref:
@@ -261,37 +262,47 @@ def lmstudio_model() -> str:
     return _DEFAULT_LMSTUDIO_MODEL
 
 
+def openrouter_api_key() -> str:
+    """API key for OpenRouter chat completions (env-only; managed via Settings → Config)."""
+    return os.environ.get("APP_OPENROUTER_API_KEY", "").strip()
+
+
+def custom_llm_api_key() -> str:
+    """Optional bearer token for the user-configured custom OpenAI-compatible endpoint."""
+    return os.environ.get("APP_LLM_CUSTOM_API_KEY", "").strip()
+
+
 def lms_cli_executable() -> str:
     """LM Studio CLI binary name or path.
 
-    Set ``LINKEDIN_LMS_CLI`` in ``.env`` (e.g. ``lms.exe`` on WSL with Windows LM Studio) so
+    Set ``APP_LMS_CLI`` in ``.env`` (e.g. ``lms.exe`` on WSL with Windows LM Studio) so
     unload/server-stop subprocess calls resolve. Default is ``lms`` when the variable is unset.
     """
-    return os.environ.get("LINKEDIN_LMS_CLI", "lms").strip() or "lms"
+    return os.environ.get("APP_LMS_CLI", "lms").strip() or "lms"
 
 
 def lms_auto_shutdown_enabled() -> bool:
     """After scoring, run `lms unload` and `lms server stop` when inference was attempted.
 
-    Set LINKEDIN_LMS_AUTO_SHUTDOWN=0 or false to keep LM Studio running across runs.
+    Set APP_LMS_AUTO_SHUTDOWN=0 or false to keep LM Studio running across runs.
     """
-    raw = os.environ.get("LINKEDIN_LMS_AUTO_SHUTDOWN", "1").strip().lower()
+    raw = os.environ.get("APP_LMS_AUTO_SHUTDOWN", "1").strip().lower()
     return raw not in ("0", "false", "no", "off")
 
 
 def lms_auto_start_server_enabled() -> bool:
     """Before scoring, run ``lms server start --bind …`` so the API listens for WSL/LAN clients.
 
-    Set ``LINKEDIN_LMS_AUTO_START_SERVER=1`` (e.g. in ``.env``) when LM Studio should be started
+    Set ``APP_LMS_AUTO_START_SERVER=1`` (e.g. in ``.env``) when LM Studio should be started
     from this app. Default off so operators can start the server manually.
     """
-    raw = os.environ.get("LINKEDIN_LMS_AUTO_START_SERVER", "0").strip().lower()
+    raw = os.environ.get("APP_LMS_AUTO_START_SERVER", "0").strip().lower()
     return raw in ("1", "true", "yes", "on")
 
 
 def lms_server_bind_address() -> str:
     """Network address for ``lms server start --bind`` (``0.0.0.0`` accepts LAN/WSL to Windows)."""
-    raw = os.environ.get("LINKEDIN_LMS_SERVER_BIND", "").strip()
+    raw = os.environ.get("APP_LMS_SERVER_BIND", "").strip()
     if raw:
         return raw
     return "0.0.0.0"
@@ -299,7 +310,7 @@ def lms_server_bind_address() -> str:
 
 def lms_server_start_port() -> int | None:
     """If set, passed as ``lms server start --port N``. Otherwise LM Studio uses default/last port."""
-    raw = os.environ.get("LINKEDIN_LMS_SERVER_PORT", "").strip()
+    raw = os.environ.get("APP_LMS_SERVER_PORT", "").strip()
     if not raw:
         return None
     try:
@@ -313,7 +324,7 @@ def lms_server_start_port() -> int | None:
 
 def lms_server_start_wait_seconds() -> float:
     """Seconds to wait after ``lms server start`` before HTTP scoring (server warm-up)."""
-    raw = os.environ.get("LINKEDIN_LMS_SERVER_START_WAIT_SEC", "2")
+    raw = os.environ.get("APP_LMS_SERVER_START_WAIT_SEC", "2")
     try:
         v = float(raw.strip())
     except ValueError:
@@ -324,10 +335,10 @@ def lms_server_start_wait_seconds() -> float:
 def schedule_catchup_min_gap_before_next_slot_seconds() -> int:
     """Minimum seconds until the next slot before a missed-slot catch-up may start (default 30m).
 
-    Set LINKEDIN_SCHEDULE_CATCHUP_MIN_GAP_SEC=0 in development to allow catch-up even when
+    Set APP_SCHEDULE_CATCHUP_MIN_GAP_SEC=0 in development to allow catch-up even when
     the next scheduled time is soon; omit or keep default in production.
     """
-    raw = os.environ.get("LINKEDIN_SCHEDULE_CATCHUP_MIN_GAP_SEC", "1800")
+    raw = os.environ.get("APP_SCHEDULE_CATCHUP_MIN_GAP_SEC", "1800")
     try:
         v = int(raw.strip())
     except ValueError:
@@ -338,10 +349,10 @@ def schedule_catchup_min_gap_before_next_slot_seconds() -> int:
 def scrape_job_limit() -> int:
     """Maximum jobs to fetch per scrape query (``QueryOptions.limit``). Default 100.
 
-    Set ``LINKEDIN_SCRAPE_JOB_LIMIT`` in ``.env`` (e.g. ``2``) to shorten development runs;
+    Set ``APP_SCRAPE_JOB_LIMIT`` in ``.env`` (e.g. ``2``) to shorten development runs;
     omit or raise the value for production-sized scrapes.
     """
-    raw = os.environ.get("LINKEDIN_SCRAPE_JOB_LIMIT", "100")
+    raw = os.environ.get("APP_SCRAPE_JOB_LIMIT", "100")
     try:
         v = int(raw.strip())
     except ValueError:
@@ -350,11 +361,11 @@ def scrape_job_limit() -> int:
 
 
 def smtp_host() -> str:
-    return os.environ.get("LINKEDIN_SMTP_HOST", "").strip()
+    return os.environ.get("APP_SMTP_HOST", "").strip()
 
 
 def smtp_port() -> int:
-    raw = os.environ.get("LINKEDIN_SMTP_PORT", "587").strip()
+    raw = os.environ.get("APP_SMTP_PORT", "587").strip()
     try:
         p = int(raw)
     except ValueError:
@@ -363,15 +374,15 @@ def smtp_port() -> int:
 
 
 def smtp_user() -> str:
-    return os.environ.get("LINKEDIN_SMTP_USER", "").strip()
+    return os.environ.get("APP_SMTP_USER", "").strip()
 
 
 def smtp_password() -> str:
-    return os.environ.get("LINKEDIN_SMTP_PASSWORD", "").strip()
+    return os.environ.get("APP_SMTP_PASSWORD", "").strip()
 
 
 def smtp_from_address() -> str:
-    raw = os.environ.get("LINKEDIN_SMTP_FROM", "").strip()
+    raw = os.environ.get("APP_SMTP_FROM", "").strip()
     if raw:
         return raw
     u = smtp_user()
@@ -381,9 +392,9 @@ def smtp_from_address() -> str:
 def smtp_use_starttls() -> bool:
     """STARTTLS after connect when not using implicit TLS (port 465).
 
-    Override with LINKEDIN_SMTP_USE_TLS=1/0 when your relay uses a non-standard port.
+    Override with APP_SMTP_USE_TLS=1/0 when your relay uses a non-standard port.
     """
-    raw = os.environ.get("LINKEDIN_SMTP_USE_TLS", "").strip().lower()
+    raw = os.environ.get("APP_SMTP_USE_TLS", "").strip().lower()
     if raw in ("1", "true", "yes", "on"):
         return True
     if raw in ("0", "false", "no", "off"):
@@ -392,8 +403,8 @@ def smtp_use_starttls() -> bool:
 
 
 def smtp_force_ssl() -> bool:
-    """Use SMTP_SSL (implicit TLS). Default when port is 465; override with LINKEDIN_SMTP_SSL=0."""
-    raw = os.environ.get("LINKEDIN_SMTP_SSL", "").strip().lower()
+    """Use SMTP_SSL (implicit TLS). Default when port is 465; override with APP_SMTP_SSL=0."""
+    raw = os.environ.get("APP_SMTP_SSL", "").strip().lower()
     if raw in ("1", "true", "yes", "on"):
         return True
     if raw in ("0", "false", "no", "off"):

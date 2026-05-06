@@ -4,29 +4,18 @@ import datetime as dt
 import json
 import logging
 import queue
-import subprocess
 import threading
-import time
 from dataclasses import dataclass
 from typing import Any
 
-import httpx
 from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
-from app.config import (
-    lms_auto_shutdown_enabled,
-    lms_auto_start_server_enabled,
-    lms_server_bind_address,
-    lms_server_start_port,
-    lms_server_start_wait_seconds,
-    lmstudio_base_url,
-    lmstudio_model,
-)
-from app.lmstudio_cli import lms_executable_for_subprocess
 from app.db import session_scope
 from app.default_system_prompt import DEFAULT_SYSTEM_PROMPT
+from app.llm import get_active_provider
+from app.llm.base import LlmProvider
 from app.llm_score_db import JobLlmScore, session_scope_llm
 from app.models import Job, ScrapeRun
 from app.services.ideal_job_requirements import get_active_requirement
@@ -169,36 +158,6 @@ def _parse_score_response(raw: str) -> tuple[int, str]:
     return score, reasoning.strip()
 
 
-def _chat_completions(
-    client: httpx.Client,
-    *,
-    model: str,
-    messages: list[dict[str, str]],
-) -> str:
-    url = f"{lmstudio_base_url().rstrip('/')}/chat/completions"
-    payload: dict[str, Any] = {
-        "model": model,
-        "messages": messages,
-        "temperature": 0.2,
-        "response_format": _match_response_format(),
-    }
-    r = client.post(
-        url,
-        json=payload,
-        headers={"Authorization": "Bearer lm-studio"},
-    )
-    r.raise_for_status()
-    body = r.json()
-    choices = body.get("choices") or []
-    if not choices:
-        raise ValueError("no choices in response")
-    msg = choices[0].get("message") or {}
-    content = msg.get("content")
-    if not isinstance(content, str) or not content.strip():
-        raise ValueError("empty message content")
-    return content.strip()
-
-
 def _upsert_score(session: Session, job_id: str, score: int, reasoning: str) -> None:
     stmt = sqlite_insert(JobLlmScore).values(job_id=job_id, score=score, reasoning=reasoning)
     stmt = stmt.on_conflict_do_update(
@@ -209,41 +168,6 @@ def _upsert_score(session: Session, job_id: str, score: int, reasoning: str) -> 
         },
     )
     session.execute(stmt)
-
-
-def _run_lms(args: list[str]) -> subprocess.CompletedProcess[str]:
-    exe = lms_executable_for_subprocess()
-    cmd = [exe, *args]
-    return subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        timeout=120,
-        shell=False,
-    )
-
-
-def start_lmstudio_server_for_scoring() -> None:
-    """``lms server start --bind …`` so WSL/LAN can reach the HTTP API (optional via env)."""
-    if not lms_auto_start_server_enabled():
-        return
-    exe = lms_executable_for_subprocess()
-    bind = lms_server_bind_address()
-    cmd = [exe, "server", "start", "--bind", bind]
-    port = lms_server_start_port()
-    if port is not None:
-        cmd.extend(["--port", str(port)])
-    logger.info("LM Studio: starting server (%s)", " ".join(cmd))
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=120, shell=False)
-    if r.returncode != 0:
-        logger.warning(
-            "lms server start failed (code=%s): %s — continuing in case server was already running",
-            r.returncode,
-            (r.stderr or r.stdout or "").strip()[:500],
-        )
-    wait = lms_server_start_wait_seconds()
-    if wait > 0:
-        time.sleep(wait)
 
 
 def _clamp_notify_threshold(n: int) -> int:
@@ -286,35 +210,6 @@ def _format_job_match_digest_body(
     return "\n".join(lines)
 
 
-def shutdown_lmstudio_after_inference() -> None:
-    """Unload model and stop LM Studio server (best-effort; logs warnings)."""
-    if not lms_auto_shutdown_enabled():
-        return
-    model = lmstudio_model()
-    r1 = _run_lms(["unload", model])
-    if r1.returncode != 0:
-        logger.warning(
-            "lms unload %s failed (code=%s): %s",
-            model,
-            r1.returncode,
-            (r1.stderr or r1.stdout or "").strip()[:500],
-        )
-        r1b = _run_lms(["unload", "--all"])
-        if r1b.returncode != 0:
-            logger.warning(
-                "lms unload --all failed (code=%s): %s",
-                r1b.returncode,
-                (r1b.stderr or r1b.stdout or "").strip()[:500],
-            )
-    r2 = _run_lms(["server", "stop"])
-    if r2.returncode != 0:
-        logger.warning(
-            "lms server stop failed (code=%s): %s",
-            r2.returncode,
-            (r2.stderr or r2.stdout or "").strip()[:500],
-        )
-
-
 def _persist_llm_compare_done(run_id: int, done: int) -> None:
     with session_scope() as session:
         run_row = session.get(ScrapeRun, run_id)
@@ -323,12 +218,25 @@ def _persist_llm_compare_done(run_id: int, done: int) -> None:
 
 
 def _score_jobs_for_run_impl(run_id: int) -> None:
-    """Score all jobs first seen in this run; optional LM Studio teardown after HTTP inference.
+    """Score all jobs first seen in this run via the active LLM provider.
 
-    Teardown (unload + server stop) runs only after at least one **successful** chat completion,
-    so connection errors do not stop LM Studio and make debugging harder.
+    Provider teardown (``after_inference``) only runs when at least one chat completion
+    succeeded — connection failures stay quiet so the operator can debug a server.
     """
-    model = lmstudio_model()
+    provider: LlmProvider = get_active_provider()
+    if not provider.is_configured():
+        logger.info(
+            "skip LLM scoring run_id=%s: no LLM provider configured (active=%s)",
+            run_id,
+            provider.id,
+        )
+        with session_scope() as session:
+            run_row = session.get(ScrapeRun, run_id)
+            if run_row is not None:
+                run_row.llm_compare_total = -1
+                run_row.llm_compare_done = 0
+        return
+
     had_successful_llm_response = False
     digest_payload: list[dict[str, str]] = []
     notify_to: str | None = None
@@ -376,7 +284,7 @@ def _score_jobs_for_run_impl(run_id: int) -> None:
         logger.info("skip LLM scoring run_id=%s: no new jobs for this run", run_id)
         return
 
-    start_lmstudio_server_for_scoring()
+    provider.before_inference()
 
     with session_scope() as session:
         run_row = session.get(ScrapeRun, run_id)
@@ -384,8 +292,9 @@ def _score_jobs_for_run_impl(run_id: int) -> None:
             run_row.llm_compare_total = len(snapshots)
             run_row.llm_compare_done = 0
 
+    response_format = _match_response_format()
     done_ct = 0
-    with httpx.Client(timeout=httpx.Timeout(300.0, connect=30.0)) as client:
+    try:
         for job in snapshots:
             try:
                 blob = format_job_blob(job)
@@ -395,11 +304,17 @@ def _score_jobs_for_run_impl(run_id: int) -> None:
                     {"role": "user", "content": user_msg},
                 ]
                 try:
-                    raw = _chat_completions(client, model=model, messages=messages)
+                    raw = provider.chat_completion(messages, response_format=response_format)
                     score, reasoning = _parse_score_response(raw)
                     had_successful_llm_response = True
                 except Exception as e:
-                    logger.warning("LLM scoring failed job_id=%s: %s", job.job_id, e, exc_info=True)
+                    logger.warning(
+                        "LLM scoring failed job_id=%s (provider=%s): %s",
+                        job.job_id,
+                        provider.id,
+                        e,
+                        exc_info=True,
+                    )
                     continue
                 try:
                     with session_scope_llm() as llm_session:
@@ -424,17 +339,21 @@ def _score_jobs_for_run_impl(run_id: int) -> None:
             finally:
                 done_ct += 1
                 _persist_llm_compare_done(run_id, done_ct)
+    finally:
+        try:
+            provider.after_inference(had_successful_response=had_successful_llm_response)
+        except Exception as e:
+            logger.warning(
+                "provider after_inference failed (provider=%s): %s",
+                provider.id,
+                e,
+                exc_info=True,
+            )
 
     if notify_to and digest_payload:
         subject = f"LinkedIn Jobs: {len(digest_payload)} match(es) ≥ {notify_thr} (run #{run_id})"
         body = _format_job_match_digest_body(run_id, run_title, run_loc, notify_thr, digest_payload)
         send_plaintext_email(notify_to, subject, body)
-
-    if had_successful_llm_response and lms_auto_shutdown_enabled():
-        try:
-            shutdown_lmstudio_after_inference()
-        except Exception as e:
-            logger.warning("LM Studio shutdown step failed: %s", e, exc_info=True)
 
 
 def score_jobs_for_run(run_id: int) -> None:

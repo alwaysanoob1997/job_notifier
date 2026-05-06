@@ -40,17 +40,16 @@
     </div>
   </header>
   <main class="container">
+    {% if not llm_is_configured() %}
+    <div class="llm-warning-banner" role="status">
+      <span class="llm-warning-banner-text">No LLM is configured — job scoring and email alerts won't run.</span>
+      <a class="llm-warning-banner-link" href="/settings/advanced#llm-provider-card">Open settings →</a>
+    </div>
+    {% endif %}
     {% block content %}{% endblock %}
   </main>
   <footer class="site-footer">
     <p>Public listings only. Follow LinkedIn’s <a href="https://www.linkedin.com/legal/user-agreement" rel="noopener">Terms of Use</a> and applicable law. Automatic runs only work while this app is running—leave it open, or use your computer’s scheduler to start it when needed.</p>
   </footer>
-  <dialog id="lmstudio-setup-dialog" class="app-dialog" aria-labelledby="lmstudio-setup-title">
-    <div class="app-dialog-inner card">
-      <h2 id="lmstudio-setup-title" class="lmstudio-dialog-heading">LM Studio</h2>
-      <div id="lmstudio-setup-body" class="lmstudio-setup-body"></div>
-      <div id="lmstudio-setup-actions" class="app-dialog-actions"></div>
-    </div>
-  </dialog>
 </body>
 </html>

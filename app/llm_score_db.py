@@ -38,7 +38,7 @@ def get_llm_engine():
     global _engine, _SessionLocal
     if _engine is None:
         url = llm_scores_database_url()
-        if not os.environ.get("LINKEDIN_LLM_SCORES_DB_URL"):
+        if not os.environ.get("APP_LLM_SCORES_DB_URL"):
             ensure_data_dir()
         elif url.startswith("sqlite:///"):
             p = Path(url.replace("sqlite:///", "", 1))

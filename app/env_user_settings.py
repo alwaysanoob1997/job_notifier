@@ -8,34 +8,46 @@ from pathlib import Path
 
 # Order preserved when writing the managed block.
 MANAGED_KEYS: tuple[str, ...] = (
-    "LINKEDIN_SCHEDULE_CATCHUP_MIN_GAP_SEC",
-    "LINKEDIN_SCHEDULE_STATUS_TZ",
-    "LINKEDIN_SMTP_HOST",
-    "LINKEDIN_SMTP_PORT",
-    "LINKEDIN_SMTP_USER",
-    "LINKEDIN_SMTP_FROM",
-    "LINKEDIN_SMTP_PASSWORD",
-    "LINKEDIN_LMS_CLI",
-    "LINKEDIN_LMS_AUTO_START_SERVER",
-    "LINKEDIN_LMS_SERVER_BIND",
-    "LINKEDIN_LMS_SERVER_PORT",
+    "APP_SCHEDULE_CATCHUP_MIN_GAP_SEC",
+    "APP_SCHEDULE_STATUS_TZ",
+    "APP_SMTP_HOST",
+    "APP_SMTP_PORT",
+    "APP_SMTP_USER",
+    "APP_SMTP_FROM",
+    "APP_SMTP_PASSWORD",
+    "APP_LMS_CLI",
+    "APP_LMS_AUTO_START_SERVER",
+    "APP_LMS_SERVER_BIND",
+    "APP_LMS_SERVER_PORT",
+    "APP_OPENROUTER_API_KEY",
+    "APP_LLM_CUSTOM_API_KEY",
+)
+
+# Secret keys whose form value is blank by default; submit-blank means "keep existing value"
+# rather than "clear", same UX as APP_SMTP_PASSWORD.
+SECRET_KEYS: tuple[str, ...] = (
+    "APP_SMTP_PASSWORD",
+    "APP_OPENROUTER_API_KEY",
+    "APP_LLM_CUSTOM_API_KEY",
 )
 
 
 def default_values() -> dict[str, str]:
     """Defaults aligned with app/config.py when variables are unset."""
     return {
-        "LINKEDIN_SCHEDULE_CATCHUP_MIN_GAP_SEC": "1800",
-        "LINKEDIN_SCHEDULE_STATUS_TZ": "Asia/Kolkata",
-        "LINKEDIN_SMTP_HOST": "smtp.gmail.com",
-        "LINKEDIN_SMTP_PORT": "587",
-        "LINKEDIN_SMTP_USER": "",
-        "LINKEDIN_SMTP_FROM": "",
-        "LINKEDIN_SMTP_PASSWORD": "",
-        "LINKEDIN_LMS_CLI": "lms",
-        "LINKEDIN_LMS_AUTO_START_SERVER": "1",
-        "LINKEDIN_LMS_SERVER_BIND": "0.0.0.0",
-        "LINKEDIN_LMS_SERVER_PORT": "1234",
+        "APP_SCHEDULE_CATCHUP_MIN_GAP_SEC": "1800",
+        "APP_SCHEDULE_STATUS_TZ": "Asia/Kolkata",
+        "APP_SMTP_HOST": "smtp.gmail.com",
+        "APP_SMTP_PORT": "587",
+        "APP_SMTP_USER": "",
+        "APP_SMTP_FROM": "",
+        "APP_SMTP_PASSWORD": "",
+        "APP_LMS_CLI": "lms",
+        "APP_LMS_AUTO_START_SERVER": "1",
+        "APP_LMS_SERVER_BIND": "0.0.0.0",
+        "APP_LMS_SERVER_PORT": "1234",
+        "APP_OPENROUTER_API_KEY": "",
+        "APP_LLM_CUSTOM_API_KEY": "",
     }
 
 
@@ -76,7 +88,7 @@ def render_merged_env(non_managed_lines: list[str], values: dict[str, str]) -> s
         parts.append("\n".join(r.rstrip() for r in non_managed_lines).rstrip())
         if parts[0]:
             parts.append("")
-    parts.append("# Managed from Settings (LinkedIn Jobs app)")
+    parts.append("# Managed from Settings")
     for k in MANAGED_KEYS:
         v = values.get(k, "")
         parts.append(f"{k}={_escape_env_value(v)}")
@@ -108,8 +120,12 @@ def write_default_env_file_if_missing(path: Path) -> None:
     path.write_text(body, encoding="utf-8")
 
 
-def merge_and_write_env(path: Path, updates: dict[str, str], *, preserve_blank_smtp_password: bool) -> None:
-    """Write `updates` for managed keys; merge with existing file. Non-managed lines preserved."""
+def merge_and_write_env(path: Path, updates: dict[str, str], *, preserve_blank_secrets: bool) -> None:
+    """Write `updates` for managed keys; merge with existing file. Non-managed lines preserved.
+
+    For ``SECRET_KEYS`` (passwords, API tokens), a blank value in ``updates`` means "keep the
+    current secret" when ``preserve_blank_secrets`` is True; otherwise the secret is cleared.
+    """
     kept: list[str] = []
     from_file: dict[str, str] = {}
     if path.is_file():
@@ -120,24 +136,32 @@ def merge_and_write_env(path: Path, updates: dict[str, str], *, preserve_blank_s
         if k in from_file:
             vals[k] = from_file[k]
     for k in MANAGED_KEYS:
-        if k in updates:
+        if k in updates and k not in SECRET_KEYS:
             vals[k] = updates[k]
-    pwd_form = (updates.get("LINKEDIN_SMTP_PASSWORD") or "").strip()
-    if pwd_form:
-        vals["LINKEDIN_SMTP_PASSWORD"] = pwd_form
-    elif preserve_blank_smtp_password:
-        prev = from_file.get("LINKEDIN_SMTP_PASSWORD")
-        if prev is None or prev == "":
-            prev = os.environ.get("LINKEDIN_SMTP_PASSWORD", "")
-        vals["LINKEDIN_SMTP_PASSWORD"] = prev or ""
-    else:
-        vals["LINKEDIN_SMTP_PASSWORD"] = ""
+    for k in SECRET_KEYS:
+        submitted = (updates.get(k) or "").strip()
+        if submitted:
+            vals[k] = submitted
+        elif preserve_blank_secrets:
+            prev = from_file.get(k)
+            if prev is None or prev == "":
+                prev = os.environ.get(k, "")
+            vals[k] = prev or ""
+        else:
+            vals[k] = ""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(render_merged_env(kept, vals), encoding="utf-8")
 
 
 def form_values_for_template() -> dict[str, str]:
-    """Values for Settings form; password always empty string for display."""
+    """Values for Settings form; secret fields always empty for display."""
     d = read_managed_from_environ()
-    d["LINKEDIN_SMTP_PASSWORD"] = ""
+    for k in SECRET_KEYS:
+        d[k] = ""
     return d
+
+
+def secrets_set_flags() -> dict[str, bool]:
+    """Whether each secret key currently has a non-empty value (for "is set" hints in the UI)."""
+    raw = read_managed_from_environ()
+    return {k: bool((raw.get(k) or "").strip()) for k in SECRET_KEYS}

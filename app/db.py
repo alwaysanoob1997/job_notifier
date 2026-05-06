@@ -27,10 +27,10 @@ def reset_engine() -> None:
 def get_engine():
     global _engine, _SessionLocal
     if _engine is None:
-        if not os.environ.get("LINKEDIN_JOBS_DB_URL"):
+        if not os.environ.get("APP_JOBS_DB_URL"):
             ensure_data_dir()
         else:
-            raw = os.environ["LINKEDIN_JOBS_DB_URL"]
+            raw = os.environ["APP_JOBS_DB_URL"]
             if raw.startswith("sqlite:///"):
                 p = Path(raw.replace("sqlite:///", "", 1))
                 p.parent.mkdir(parents=True, exist_ok=True)

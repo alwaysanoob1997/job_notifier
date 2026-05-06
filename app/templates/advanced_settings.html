@@ -53,44 +53,70 @@
   <p class="error-inline" role="alert">LM Studio server port must be a number from 1 to 65535.</p>
   {% endif %}
   <form method="post" action="/settings/config" class="user-config-form">
-    <label>Catch-up min gap (seconds)
-      <input name="LINKEDIN_SCHEDULE_CATCHUP_MIN_GAP_SEC" type="number" min="0" step="1" value="{{ config_values['LINKEDIN_SCHEDULE_CATCHUP_MIN_GAP_SEC'] }}" />
-    </label>
-    <label>Time zone for schedules (e.g. America/New_York)
-      <input name="LINKEDIN_SCHEDULE_STATUS_TZ" type="text" value="{{ config_values['LINKEDIN_SCHEDULE_STATUS_TZ'] }}" placeholder="optional" autocomplete="off" />
-    </label>
-    <label>SMTP host
-      <input name="LINKEDIN_SMTP_HOST" type="text" value="{{ config_values['LINKEDIN_SMTP_HOST'] }}" placeholder="optional" autocomplete="off" />
-    </label>
-    <label>SMTP port
-      <input name="LINKEDIN_SMTP_PORT" type="number" min="1" max="65535" step="1" value="{{ config_values['LINKEDIN_SMTP_PORT'] }}" />
-    </label>
-    <label>SMTP email (username)
-      <input name="LINKEDIN_SMTP_USER" type="text" value="{{ config_values['LINKEDIN_SMTP_USER'] }}" placeholder="optional" autocomplete="username" />
-    </label>
-    <label>SMTP email (from address)
-      <input name="LINKEDIN_SMTP_FROM" type="text" value="{{ config_values['LINKEDIN_SMTP_FROM'] }}" placeholder="optional" autocomplete="email" />
-    </label>
-    <label>SMTP password
-      <input name="LINKEDIN_SMTP_PASSWORD" type="password" value="" placeholder="Leave blank to keep current password" autocomplete="current-password" />
-    </label>
-    <label>LM Studio CLI command
-      <input name="LINKEDIN_LMS_CLI" type="text" value="{{ config_values['LINKEDIN_LMS_CLI'] }}" placeholder="lms" autocomplete="off" />
-    </label>
-    <label>LM Studio auto-start server before scoring
-      {% set lms_auto = (config_values['LINKEDIN_LMS_AUTO_START_SERVER'] or '1')|lower %}
-      <select name="LINKEDIN_LMS_AUTO_START_SERVER" aria-describedby="hint-lms-auto-start">
-        <option value="0" {% if lms_auto not in ['1', 'true', 'yes', 'on'] %}selected{% endif %}>Off (0)</option>
-        <option value="1" {% if lms_auto in ['1', 'true', 'yes', 'on'] %}selected{% endif %}>On (1)</option>
-      </select>
-    </label>
-    <p id="hint-lms-auto-start" class="muted small-hint">When on, the app starts the LM Studio server before scoring jobs.</p>
-    <label>LM Studio server address
-      <input name="LINKEDIN_LMS_SERVER_BIND" type="text" value="{{ config_values['LINKEDIN_LMS_SERVER_BIND'] }}" placeholder="0.0.0.0" autocomplete="off" />
-    </label>
-    <label>LM Studio server port
-      <input name="LINKEDIN_LMS_SERVER_PORT" type="number" min="1" max="65535" step="1" value="{{ config_values['LINKEDIN_LMS_SERVER_PORT'] }}" />
-    </label>
+    <fieldset class="config-subsection">
+      <legend>Scheduling</legend>
+      <p class="muted small-hint">When the app catches up on missed scrape slots and which time zone schedule times are interpreted in.</p>
+      <label>Catch-up min gap (seconds)
+        <input name="APP_SCHEDULE_CATCHUP_MIN_GAP_SEC" type="number" min="0" step="1" value="{{ config_values['APP_SCHEDULE_CATCHUP_MIN_GAP_SEC'] }}" />
+      </label>
+      <label>Time zone for schedules (e.g. America/New_York)
+        <input name="APP_SCHEDULE_STATUS_TZ" type="text" value="{{ config_values['APP_SCHEDULE_STATUS_TZ'] }}" placeholder="optional" autocomplete="off" />
+      </label>
+    </fieldset>
+
+    <fieldset class="config-subsection">
+      <legend>Email (SMTP)</legend>
+      <p class="muted small-hint">Used to email scoring summaries. Leave blank to disable email notifications.</p>
+      <label>SMTP host
+        <input name="APP_SMTP_HOST" type="text" value="{{ config_values['APP_SMTP_HOST'] }}" placeholder="optional" autocomplete="off" />
+      </label>
+      <label>SMTP port
+        <input name="APP_SMTP_PORT" type="number" min="1" max="65535" step="1" value="{{ config_values['APP_SMTP_PORT'] }}" />
+      </label>
+      <label>SMTP email (username)
+        <input name="APP_SMTP_USER" type="text" value="{{ config_values['APP_SMTP_USER'] }}" placeholder="optional" autocomplete="username" />
+      </label>
+      <label>SMTP email (from address)
+        <input name="APP_SMTP_FROM" type="text" value="{{ config_values['APP_SMTP_FROM'] }}" placeholder="optional" autocomplete="email" />
+      </label>
+      <label>SMTP password
+        <input name="APP_SMTP_PASSWORD" type="password" value="" placeholder="{% if secrets_set['APP_SMTP_PASSWORD'] %}Leave blank to keep current password{% else %}Required to send mail{% endif %}" autocomplete="current-password" />
+      </label>
+    </fieldset>
+
+    <fieldset class="config-subsection">
+      <legend>LM Studio</legend>
+      <p class="muted small-hint">Local LLM runtime settings. Used when LM Studio is the active provider in the panel below.</p>
+      <label>LM Studio CLI command
+        <input name="APP_LMS_CLI" type="text" value="{{ config_values['APP_LMS_CLI'] }}" placeholder="lms" autocomplete="off" />
+      </label>
+      <label>LM Studio auto-start server before scoring
+        {% set lms_auto = (config_values['APP_LMS_AUTO_START_SERVER'] or '1')|lower %}
+        <select name="APP_LMS_AUTO_START_SERVER" aria-describedby="hint-lms-auto-start">
+          <option value="0" {% if lms_auto not in ['1', 'true', 'yes', 'on'] %}selected{% endif %}>Off (0)</option>
+          <option value="1" {% if lms_auto in ['1', 'true', 'yes', 'on'] %}selected{% endif %}>On (1)</option>
+        </select>
+      </label>
+      <p id="hint-lms-auto-start" class="muted small-hint">When on, the app starts the LM Studio server before scoring jobs.</p>
+      <label>LM Studio server address
+        <input name="APP_LMS_SERVER_BIND" type="text" value="{{ config_values['APP_LMS_SERVER_BIND'] }}" placeholder="0.0.0.0" autocomplete="off" />
+      </label>
+      <label>LM Studio server port
+        <input name="APP_LMS_SERVER_PORT" type="number" min="1" max="65535" step="1" value="{{ config_values['APP_LMS_SERVER_PORT'] }}" />
+      </label>
+    </fieldset>
+
+    <fieldset class="config-subsection">
+      <legend>API keys</legend>
+      <p class="muted small-hint">Stored only on this computer. Pair with the matching provider in the LLM provider panel below. Leave blank to keep an existing key.</p>
+      <label>OpenRouter API key
+        <input name="APP_OPENROUTER_API_KEY" type="password" value="" placeholder="{% if secrets_set['APP_OPENROUTER_API_KEY'] %}Leave blank to keep current key{% else %}Optional — needed only when using OpenRouter{% endif %}" autocomplete="off" />
+      </label>
+      <label>Custom endpoint API key
+        <input name="APP_LLM_CUSTOM_API_KEY" type="password" value="" placeholder="{% if secrets_set['APP_LLM_CUSTOM_API_KEY'] %}Leave blank to keep current key{% else %}Optional — needed only when your custom endpoint requires auth{% endif %}" autocomplete="off" />
+      </label>
+    </fieldset>
+
     <p class="user-config-actions">
       <button type="submit" class="btn-primary">Save config</button>
     </p>
@@ -100,22 +126,57 @@
   </form>
 </section>
 
-<section class="card" id="lmstudio-settings-card" aria-labelledby="lmstudio-settings-heading">
-  <h2 id="lmstudio-settings-heading">LM Studio</h2>
-  <p class="muted">Pick which local AI model scores job listings. Your choice is remembered on this computer.</p>
-  <p id="lmstudio-settings-env" class="lmstudio-settings-msg muted" hidden></p>
-  <p id="lmstudio-settings-error" class="error-inline" hidden></p>
-  <div id="lmstudio-settings-form-wrap">
+<section class="card" id="llm-provider-card" aria-labelledby="llm-provider-heading">
+  <h2 id="llm-provider-heading">LLM provider</h2>
+  <p class="muted">Pick which AI service scores job listings. Your choice is remembered on this computer; API keys live in the Config form above.</p>
+  <p id="llm-provider-status" class="muted small-hint" role="status"></p>
+  <p id="llm-provider-error" class="error-inline" hidden></p>
+
+  <label>Provider
+    <select id="llm-provider-select" aria-describedby="llm-provider-hint">
+      <option value="lmstudio">LM Studio (local)</option>
+      <option value="openrouter">OpenRouter</option>
+      <option value="custom">Custom endpoint</option>
+    </select>
+  </label>
+  <p id="llm-provider-hint" class="muted small-hint">Only one provider is active at a time. Switching providers does not delete the others' settings.</p>
+
+  <div class="llm-provider-panel" id="llm-panel-lmstudio" data-provider="lmstudio" hidden>
     <label>Preferred model
-      <select id="lmstudio-preferred-select" name="lmstudio_preferred" aria-describedby="lmstudio-settings-hint"></select>
+      <select id="llm-lmstudio-model" aria-describedby="llm-lmstudio-hint"></select>
     </label>
-    <p id="lmstudio-settings-hint" class="muted small-hint">Download models in LM Studio first, then refresh the list.</p>
-    <div class="lmstudio-settings-actions">
-      <button type="button" class="btn-secondary" id="lmstudio-refresh-models">Refresh model list</button>
-      <button type="button" class="btn-primary" id="lmstudio-save-preferred">Save preferred model</button>
+    <p id="llm-lmstudio-hint" class="muted small-hint">Download models in LM Studio first, then refresh the list.</p>
+    <p id="llm-lmstudio-unavailable" class="muted small-hint" hidden></p>
+    <div class="llm-settings-actions">
+      <button type="button" class="btn-secondary" id="llm-lmstudio-refresh">Refresh model list</button>
+      <button type="button" class="btn-primary" id="llm-lmstudio-save">Save</button>
     </div>
   </div>
-  <p id="lmstudio-settings-unavailable" class="muted" hidden></p>
+
+  <div class="llm-provider-panel" id="llm-panel-openrouter" data-provider="openrouter" hidden>
+    <label>Model
+      <select id="llm-openrouter-model" aria-describedby="llm-openrouter-hint"></select>
+    </label>
+    <p id="llm-openrouter-hint" class="muted small-hint">Set your OpenRouter API key in the Config form above, then refresh to load the model list.</p>
+    <p id="llm-openrouter-models-error" class="muted small-hint" hidden></p>
+    <div class="llm-settings-actions">
+      <button type="button" class="btn-secondary" id="llm-openrouter-refresh">Refresh model list</button>
+      <button type="button" class="btn-primary" id="llm-openrouter-save">Save</button>
+    </div>
+  </div>
+
+  <div class="llm-provider-panel" id="llm-panel-custom" data-provider="custom" hidden>
+    <label>Base URL
+      <input type="text" id="llm-custom-base-url" placeholder="http://192.168.1.10:8080/v1" autocomplete="off" />
+    </label>
+    <label>Model id
+      <input type="text" id="llm-custom-model" placeholder="e.g. meta-llama/Llama-3.1-8B-Instruct" autocomplete="off" />
+    </label>
+    <p class="muted small-hint">The endpoint must speak the OpenAI <code>/chat/completions</code> protocol. If it requires a bearer token, set the "Custom endpoint API key" in the Config form above.</p>
+    <div class="llm-settings-actions">
+      <button type="button" class="btn-primary" id="llm-custom-save">Save</button>
+    </div>
+  </div>
 </section>
 
 <h2 class="settings-subheading">Browser paths</h2>

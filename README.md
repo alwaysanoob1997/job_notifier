@@ -3,7 +3,7 @@
 This workspace contains the vendored **[linkedin-jobs-scraper](py-linkedin-jobs-scraper-master/)** library and a small **FastAPI** web app that:
 
 - Scrapes **public** LinkedIn job listings (guest mode; no login). See the upstream [documentation](py-linkedin-jobs-scraper-master/Documentation.md).
-- Stores deduplicated jobs in **SQLite** under **`~/LinkedInJobs/jobs.db`** (override with **`LINKEDIN_JOBS_DB_URL`**, e.g. for tests).
+- Stores deduplicated jobs in **SQLite** under **`~/LinkedInJobs/jobs.db`** (override with **`APP_JOBS_DB_URL`**, e.g. for tests).
 - Marks **new** jobs per run: a `job_id` is inserted only once; repeats in later runs count as duplicates.
 - Runs **1–5 times per day** on a fixed local-time grid while **`uvicorn` is running**, plus a **manual run** button.
 - Offers a **CLI** entry point for cron / systemd / launchd: `python -m app`.

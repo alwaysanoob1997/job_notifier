@@ -19,18 +19,18 @@ logger = logging.getLogger(__name__)
 
 
 def send_plaintext_email(to: str, subject: str, body: str) -> None:
-    """Send one plaintext message. No-op when LINKEDIN_SMTP_HOST is unset; logs on failure."""
+    """Send one plaintext message. No-op when APP_SMTP_HOST is unset; logs on failure."""
     host = smtp_host()
     if not host:
         logger.info(
-            "email skipped: LINKEDIN_SMTP_HOST not set (to=%s subject=%r)",
+            "email skipped: APP_SMTP_HOST not set (to=%s subject=%r)",
             to,
             subject[:120],
         )
         return
     from_addr = smtp_from_address()
     if not from_addr:
-        logger.warning("email skipped: set LINKEDIN_SMTP_FROM or LINKEDIN_SMTP_USER")
+        logger.warning("email skipped: set APP_SMTP_FROM or APP_SMTP_USER")
         return
 
     msg = EmailMessage()

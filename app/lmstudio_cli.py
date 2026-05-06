@@ -63,7 +63,7 @@ def _run_lms_ls_json() -> tuple[str | None, str | None]:
     """Return (stdout, error_message). stdout is None on failure."""
     exe = resolved_lms_path()
     if not exe:
-        return None, "LM Studio CLI not found in PATH (install LM Studio or set LINKEDIN_LMS_CLI)."
+        return None, "LM Studio CLI not found in PATH (install LM Studio or set APP_LMS_CLI)."
     try:
         r = subprocess.run(
             [exe, "ls", "--json"],

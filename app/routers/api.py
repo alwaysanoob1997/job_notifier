@@ -4,64 +4,107 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.config import lmstudio_env_overrides_model
 from app.dependencies import get_db
-from app.lmstudio_cli import lms_cli_available, list_downloaded_models
-from app.lmstudio_prefs import get_preferred_model_id, set_preferred_model_id
+from app.llm import PROVIDER_IDS, all_providers, get_active_provider, get_provider
+from app.llm.openrouter import OpenRouterProvider, invalidate_models_cache
+from app.llm_prefs import (
+    PROVIDER_CUSTOM,
+    PROVIDER_LMSTUDIO,
+    PROVIDER_OPENROUTER,
+    set_active_provider_id,
+    update_provider_block,
+)
 from app.models import ScrapeRun
 
 router = APIRouter()
 
 
-class LmstudioPreferencesBody(BaseModel):
-    preferred_model_id: str = Field(..., min_length=1, max_length=2048)
+class _LmStudioPrefs(BaseModel):
+    model: str = Field("", max_length=2048)
 
 
-@router.get("/lmstudio/status")
-def lmstudio_status():
-    """LM Studio CLI presence, downloaded models, and persisted preference (file, not env)."""
-    cli = lms_cli_available()
-    models: list[str] = []
-    list_error: str | None = None
-    if cli:
-        models, list_error = list_downloaded_models()
+class _OpenRouterPrefs(BaseModel):
+    model: str = Field("", max_length=2048)
+
+
+class _CustomPrefs(BaseModel):
+    base_url: str = Field("", max_length=2048)
+    model: str = Field("", max_length=2048)
+
+
+class LlmPreferencesBody(BaseModel):
+    provider: str = Field(..., min_length=1, max_length=64)
+    lmstudio: _LmStudioPrefs | None = None
+    openrouter: _OpenRouterPrefs | None = None
+    custom: _CustomPrefs | None = None
+
+
+@router.get("/llm/status")
+def llm_status():
+    """All providers' configuration state plus which one is currently selected."""
+    active = get_active_provider()
+    providers: dict[str, dict] = {}
+    for p in all_providers():
+        providers[p.id] = p.status_summary()
     return {
-        "cli_available": cli,
-        "models": models,
-        "preferred_model_id": get_preferred_model_id(),
-        "env_overrides_model": lmstudio_env_overrides_model(),
-        "list_error": list_error,
+        "active_provider": active.id,
+        "configured": active.is_configured(),
+        "providers": providers,
     }
 
 
-@router.post("/lmstudio/preferences")
-def lmstudio_preferences(body: LmstudioPreferencesBody):
-    """Persist preferred model id (validated against `lms ls` when the CLI works and models exist)."""
-    if not lms_cli_available():
-        raise HTTPException(
-            status_code=503,
-            detail="LM Studio CLI not found. Install LM Studio from https://lmstudio.ai/ "
-            "or set LINKEDIN_LMS_CLI to your lms executable.",
-        )
-    models, list_error = list_downloaded_models()
-    if list_error:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Could not list models: {list_error}",
-        )
-    if not models:
+@router.post("/llm/preferences")
+def llm_preferences(body: LlmPreferencesBody):
+    """Persist provider choice and per-provider non-secret settings."""
+    pid = body.provider.strip().lower()
+    if pid not in PROVIDER_IDS:
         raise HTTPException(
             status_code=400,
-            detail="No models downloaded yet. Open LM Studio and download a model, then try again.",
+            detail=f"Unknown provider {pid!r}; expected one of {list(PROVIDER_IDS)}.",
         )
-    choice = body.preferred_model_id.strip()
-    if choice not in models:
-        raise HTTPException(
-            status_code=400,
-            detail="Selected model is not in the downloaded models list.",
-        )
-    set_preferred_model_id(choice)
-    return {"ok": True, "preferred_model_id": choice}
+
+    if body.lmstudio is not None and (model := body.lmstudio.model.strip()):
+        if pid == PROVIDER_LMSTUDIO:
+            available, list_error = get_provider(PROVIDER_LMSTUDIO).available_models()
+            if list_error and not available:
+                raise HTTPException(status_code=503, detail=f"Could not list models: {list_error}")
+            if available and model not in available:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Selected model is not in the downloaded models list.",
+                )
+        update_provider_block(PROVIDER_LMSTUDIO, {"preferred_model_id": model})
+
+    if body.openrouter is not None and (model := body.openrouter.model.strip()):
+        update_provider_block(PROVIDER_OPENROUTER, {"model": model})
+
+    if body.custom is not None:
+        updates: dict[str, str] = {}
+        if body.custom.base_url.strip():
+            updates["base_url"] = body.custom.base_url.strip()
+        if body.custom.model.strip():
+            updates["model"] = body.custom.model.strip()
+        if updates:
+            update_provider_block(PROVIDER_CUSTOM, updates)
+
+    set_active_provider_id(pid)
+
+    active = get_active_provider()
+    return {
+        "ok": True,
+        "active_provider": active.id,
+        "configured": active.is_configured(),
+    }
+
+
+@router.get("/llm/openrouter/models")
+def llm_openrouter_models(refresh: int = 0):
+    """List OpenRouter models for the dropdown (cached for ~10 minutes)."""
+    if refresh:
+        invalidate_models_cache()
+    provider = OpenRouterProvider()
+    models, error = provider.available_models()
+    return {"models": models, "list_error": error}
 
 
 @router.get("/runs/{run_id}")

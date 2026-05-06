@@ -254,11 +254,11 @@ def start_scheduler() -> None:
         return
     env_path = dotenv_file_path()
     env_exists = env_path.is_file()
-    raw_tz = os.environ.get("LINKEDIN_SCHEDULE_STATUS_TZ", "").strip()
+    raw_tz = os.environ.get("APP_SCHEDULE_STATUS_TZ", "").strip()
     tz = schedule_status_tzinfo()
     tz_label = _tz_label(tz)
     logger.info(
-        "Schedule zone: dotenv_path=%s exists=%s LINKEDIN_SCHEDULE_STATUS_TZ=%r resolved=%s",
+        "Schedule zone: dotenv_path=%s exists=%s APP_SCHEDULE_STATUS_TZ=%r resolved=%s",
         env_path,
         env_exists,
         raw_tz or "(unset)",
@@ -266,9 +266,9 @@ def start_scheduler() -> None:
     )
     if env_exists and not raw_tz and _resolved_zone_looks_like_utc(tz):
         logger.warning(
-            "Schedule zone resolved to %s but LINKEDIN_SCHEDULE_STATUS_TZ is unset. "
+            "Schedule zone resolved to %s but APP_SCHEDULE_STATUS_TZ is unset. "
             "On WSL the system zone is often UTC while you want local run times — set "
-            "LINKEDIN_SCHEDULE_STATUS_TZ (e.g. Asia/Kolkata) in .env.",
+            "APP_SCHEDULE_STATUS_TZ (e.g. Asia/Kolkata) in .env.",
             tz_label,
         )
     _scheduler = BackgroundScheduler(

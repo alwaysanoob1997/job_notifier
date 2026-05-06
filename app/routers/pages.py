@@ -16,7 +16,12 @@ from app.config import (
     schedule_status_tzinfo,
 )
 from app.default_system_prompt import DEFAULT_SYSTEM_PROMPT
-from app.env_user_settings import default_values, form_values_for_template, merge_and_write_env
+from app.env_user_settings import (
+    default_values,
+    form_values_for_template,
+    merge_and_write_env,
+    secrets_set_flags,
+)
 from app.dependencies import get_db
 from app.llm_score_db import fetch_scores_for_job_ids
 from app.models import AppSettings, IdealJobRequirement, Job, JobFilter, ScheduleAudit, ScrapeRun, SystemPromptVersion
@@ -499,6 +504,8 @@ def _parse_managed_config_form(
     lms_auto_start_s: str,
     lms_bind_s: str,
     lms_server_port_s: str,
+    openrouter_key_s: str = "",
+    custom_key_s: str = "",
 ) -> tuple[dict[str, str] | None, str | None]:
     gs = (gap_s or "").strip()
     try:
@@ -527,17 +534,19 @@ def _parse_managed_config_form(
         auto_start_val = "0"
     bind_val = (lms_bind_s or "").strip() or "0.0.0.0"
     updates = {
-        "LINKEDIN_SCHEDULE_CATCHUP_MIN_GAP_SEC": str(gap),
-        "LINKEDIN_SCHEDULE_STATUS_TZ": (tz_s or "").strip(),
-        "LINKEDIN_SMTP_HOST": (host_s or "").strip(),
-        "LINKEDIN_SMTP_PORT": str(port),
-        "LINKEDIN_SMTP_USER": (user_s or "").strip(),
-        "LINKEDIN_SMTP_FROM": (from_s or "").strip(),
-        "LINKEDIN_SMTP_PASSWORD": (pwd_s or "").strip(),
-        "LINKEDIN_LMS_CLI": ((cli_s or "").strip() or "lms"),
-        "LINKEDIN_LMS_AUTO_START_SERVER": auto_start_val,
-        "LINKEDIN_LMS_SERVER_BIND": bind_val,
-        "LINKEDIN_LMS_SERVER_PORT": str(lms_port),
+        "APP_SCHEDULE_CATCHUP_MIN_GAP_SEC": str(gap),
+        "APP_SCHEDULE_STATUS_TZ": (tz_s or "").strip(),
+        "APP_SMTP_HOST": (host_s or "").strip(),
+        "APP_SMTP_PORT": str(port),
+        "APP_SMTP_USER": (user_s or "").strip(),
+        "APP_SMTP_FROM": (from_s or "").strip(),
+        "APP_SMTP_PASSWORD": (pwd_s or "").strip(),
+        "APP_LMS_CLI": ((cli_s or "").strip() or "lms"),
+        "APP_LMS_AUTO_START_SERVER": auto_start_val,
+        "APP_LMS_SERVER_BIND": bind_val,
+        "APP_LMS_SERVER_PORT": str(lms_port),
+        "APP_OPENROUTER_API_KEY": (openrouter_key_s or "").strip(),
+        "APP_LLM_CUSTOM_API_KEY": (custom_key_s or "").strip(),
     }
     return updates, None
 
@@ -579,6 +588,7 @@ def advanced_settings(
             "config_values": cfg,
             "config_error": config_error,
             "config_saved": config_saved,
+            "secrets_set": secrets_set_flags(),
         },
     )
 
@@ -628,30 +638,34 @@ def reset_system_prompt(db: Session = Depends(get_db)):
 @router.post("/settings/config")
 def save_settings_config(
     _db: Session = Depends(get_db),
-    LINKEDIN_SCHEDULE_CATCHUP_MIN_GAP_SEC: str = Form(""),
-    LINKEDIN_SCHEDULE_STATUS_TZ: str = Form(""),
-    LINKEDIN_SMTP_HOST: str = Form(""),
-    LINKEDIN_SMTP_PORT: str = Form(""),
-    LINKEDIN_SMTP_USER: str = Form(""),
-    LINKEDIN_SMTP_FROM: str = Form(""),
-    LINKEDIN_SMTP_PASSWORD: str = Form(""),
-    LINKEDIN_LMS_CLI: str = Form(""),
-    LINKEDIN_LMS_AUTO_START_SERVER: str = Form(""),
-    LINKEDIN_LMS_SERVER_BIND: str = Form(""),
-    LINKEDIN_LMS_SERVER_PORT: str = Form(""),
+    APP_SCHEDULE_CATCHUP_MIN_GAP_SEC: str = Form(""),
+    APP_SCHEDULE_STATUS_TZ: str = Form(""),
+    APP_SMTP_HOST: str = Form(""),
+    APP_SMTP_PORT: str = Form(""),
+    APP_SMTP_USER: str = Form(""),
+    APP_SMTP_FROM: str = Form(""),
+    APP_SMTP_PASSWORD: str = Form(""),
+    APP_LMS_CLI: str = Form(""),
+    APP_LMS_AUTO_START_SERVER: str = Form(""),
+    APP_LMS_SERVER_BIND: str = Form(""),
+    APP_LMS_SERVER_PORT: str = Form(""),
+    APP_OPENROUTER_API_KEY: str = Form(""),
+    APP_LLM_CUSTOM_API_KEY: str = Form(""),
 ):
     parsed, err = _parse_managed_config_form(
-        LINKEDIN_SCHEDULE_CATCHUP_MIN_GAP_SEC,
-        LINKEDIN_SCHEDULE_STATUS_TZ,
-        LINKEDIN_SMTP_HOST,
-        LINKEDIN_SMTP_PORT,
-        LINKEDIN_SMTP_USER,
-        LINKEDIN_SMTP_FROM,
-        LINKEDIN_SMTP_PASSWORD,
-        LINKEDIN_LMS_CLI,
-        LINKEDIN_LMS_AUTO_START_SERVER,
-        LINKEDIN_LMS_SERVER_BIND,
-        LINKEDIN_LMS_SERVER_PORT,
+        APP_SCHEDULE_CATCHUP_MIN_GAP_SEC,
+        APP_SCHEDULE_STATUS_TZ,
+        APP_SMTP_HOST,
+        APP_SMTP_PORT,
+        APP_SMTP_USER,
+        APP_SMTP_FROM,
+        APP_SMTP_PASSWORD,
+        APP_LMS_CLI,
+        APP_LMS_AUTO_START_SERVER,
+        APP_LMS_SERVER_BIND,
+        APP_LMS_SERVER_PORT,
+        APP_OPENROUTER_API_KEY,
+        APP_LLM_CUSTOM_API_KEY,
     )
     if err is not None or parsed is None:
         return RedirectResponse(
@@ -661,7 +675,7 @@ def save_settings_config(
     merge_and_write_env(
         dotenv_file_path(),
         parsed,
-        preserve_blank_smtp_password=True,
+        preserve_blank_secrets=True,
     )
     _reload_dotenv_and_restart_scheduler()
     return RedirectResponse(url="/settings/advanced?config_saved=1", status_code=status.HTTP_303_SEE_OTHER)
@@ -672,7 +686,7 @@ def reset_settings_config(_db: Session = Depends(get_db)):
     merge_and_write_env(
         dotenv_file_path(),
         default_values(),
-        preserve_blank_smtp_password=False,
+        preserve_blank_secrets=False,
     )
     _reload_dotenv_and_restart_scheduler()
     return RedirectResponse(url="/settings/advanced", status_code=status.HTTP_303_SEE_OTHER)
