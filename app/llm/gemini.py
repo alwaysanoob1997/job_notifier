@@ -34,7 +34,7 @@ _HTTP_TIMEOUT = httpx.Timeout(300.0, connect=30.0)
 _MODELS_TIMEOUT = httpx.Timeout(20.0, connect=10.0)
 _MODELS_CACHE_TTL_SEC = 600.0
 
-_DEFAULT_MODEL = "gemini-3-flash-preview"
+_DEFAULT_MODEL = "gemini-3.1-flash-live-preview"
 
 
 class _ModelsCache:

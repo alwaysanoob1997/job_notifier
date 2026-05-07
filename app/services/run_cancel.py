@@ -42,6 +42,17 @@ def is_cancelled(run_id: int) -> bool:
     return bool(ev is not None and ev.is_set())
 
 
+def has_worker(run_id: int) -> bool:
+    """True if a worker has registered a cancel event for ``run_id`` (i.e. is alive).
+
+    Used by the UI to detect that scrape or LLM scoring is running on this run even
+    when the persisted ``ScrapeRun.status`` no longer says 'running' — for example a
+    Rescore on a previously cancelled run.
+    """
+    with _lock:
+        return run_id in _events
+
+
 def discard(run_id: int) -> None:
     """Forget the event for ``run_id`` once the worker is done."""
     with _lock:

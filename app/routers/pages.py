@@ -503,10 +503,14 @@ def _run_is_active(run: ScrapeRun) -> bool:
     """
     if run.status == "running":
         return True
-    if run.status != "success":
-        return False
-    total = run.llm_compare_total
-    if total is not None and total > 0 and run.llm_compare_done < total:
+    if run.status == "success":
+        total = run.llm_compare_total
+        if total is not None and total > 0 and run.llm_compare_done < total:
+            return True
+    # A live worker (e.g. Rescore on a previously cancelled/failed run) is also
+    # "active" even though the persisted status no longer says running. Without this
+    # the Stop button would be hidden while a Rescore worker is actually scoring.
+    if run_cancel.has_worker(run.id):
         return True
     return False
 

@@ -279,13 +279,14 @@ def _positive_int_env(var: str, default: int) -> int:
 
 
 def gemini_rpm() -> int:
-    """Client-side requests-per-minute cap applied to Gemini chat completions. Default 60.
+    """Client-side requests-per-minute cap applied to Gemini chat completions. Default 15.
 
     Gemini per-model rate limits vary by tier (see
-    https://ai.google.dev/gemini-api/docs/rate-limits). Override with ``APP_GEMINI_RPM``
-    when your tier allows a higher or requires a lower per-minute ceiling.
+    https://ai.google.dev/gemini-api/docs/rate-limits). The default matches the
+    free-tier flash-lite ceiling; override with ``APP_GEMINI_RPM`` when your tier
+    allows a higher (or requires a lower) per-minute cap.
     """
-    return _positive_int_env("APP_GEMINI_RPM", 60)
+    return _positive_int_env("APP_GEMINI_RPM", 15)
 
 
 def gemini_max_retries() -> int:
