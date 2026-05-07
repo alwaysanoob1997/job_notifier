@@ -23,14 +23,18 @@ from typing import Any, ClassVar
 import httpx
 
 from app.config import gemini_api_key, gemini_max_retries, gemini_rpm
-from app.llm.base import LlmProvider, ModelInfo
+from app.llm.base import CancelCheck, LlmProvider, LlmRequestCancelled, ModelInfo
 from app.llm.rate_limit import SlidingWindowLimiter
 from app.llm_prefs import PROVIDER_GEMINI, get_provider_block
 
 _logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
-_HTTP_TIMEOUT = httpx.Timeout(300.0, connect=30.0)
+# Healthy chat completions return in 1.5–10s (see post-fix logs). 60s is well above
+# the slowest legitimate response we observed but quickly gives up on stalled
+# requests. With ``gemini_max_retries=2`` (3 attempts), worst case per call is
+# ~3 × 60s = 3 min instead of the previous ~3 × 300s = 15 min.
+_HTTP_TIMEOUT = httpx.Timeout(60.0, connect=15.0)
 _MODELS_TIMEOUT = httpx.Timeout(20.0, connect=10.0)
 _MODELS_CACHE_TTL_SEC = 600.0
 
@@ -152,6 +156,7 @@ class GeminiProvider(LlmProvider):
         *,
         response_format: dict[str, Any],
         temperature: float = 0.2,
+        cancel_check: CancelCheck | None = None,
     ) -> str:
         api_key = gemini_api_key()
         if not api_key:
@@ -170,6 +175,12 @@ class GeminiProvider(LlmProvider):
         max_retries = gemini_max_retries()
         last_exc: Exception | None = None
         for attempt in range(max_retries + 1):
+            # Cooperative cancel check: skip the entire attempt (no acquire, no HTTP)
+            # when the caller has already requested cancellation. This bounds the
+            # worst-case time-to-respond-to-Stop to roughly the duration of a single
+            # in-flight HTTP attempt (capped by ``_HTTP_TIMEOUT``).
+            if cancel_check is not None and cancel_check():
+                raise LlmRequestCancelled("scoring cancelled by user")
             waited = limiter.acquire()
             if waited > 0:
                 _logger.info(

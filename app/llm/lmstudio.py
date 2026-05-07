@@ -19,7 +19,7 @@ from app.config import (
     lmstudio_env_overrides_model,
     lmstudio_model,
 )
-from app.llm.base import LlmProvider
+from app.llm.base import CancelCheck, LlmProvider
 from app.lmstudio_cli import (
     lms_cli_available,
     lms_executable_for_subprocess,
@@ -68,7 +68,13 @@ class LmStudioProvider(LlmProvider):
         *,
         response_format: dict[str, Any],
         temperature: float = 0.2,
+        cancel_check: CancelCheck | None = None,
     ) -> str:
+        # ``cancel_check`` is accepted for interface parity. LM Studio runs locally
+        # and has no internal retry loop, so there's no in-call interruption point
+        # beyond the single HTTP request — caller-side cancellation between jobs
+        # is sufficient here.
+        del cancel_check  # noqa: F841 - declared for interface parity
         url = f"{lmstudio_base_url().rstrip('/')}/chat/completions"
         payload: dict[str, Any] = {
             "model": self.model(),

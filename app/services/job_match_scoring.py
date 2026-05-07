@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.db import session_scope
 from app.default_system_prompt import DEFAULT_SYSTEM_PROMPT
 from app.llm import get_active_provider
-from app.llm.base import LlmProvider
+from app.llm.base import LlmProvider, LlmRequestCancelled
 from app.llm_score_db import JobLlmScore, session_scope_llm
 from app.models import Job, ScrapeRun
 from app.services import run_cancel
@@ -34,6 +34,20 @@ def _lock_for_run(run_id: int) -> threading.Lock:
         if run_id not in _run_score_locks:
             _run_score_locks[run_id] = threading.Lock()
         return _run_score_locks[run_id]
+
+
+def is_scoring_active(run_id: int) -> bool:
+    """True while a scoring worker holds the per-run lock for ``run_id``.
+
+    Single source of truth for "scoring is currently running on this run". The lock
+    is acquired right before ``_score_jobs_for_run_impl`` and released in the
+    worker's ``finally``, so its locked state matches the worker's lifetime exactly.
+    """
+    with _run_score_locks_mutex:
+        lock = _run_score_locks.get(run_id)
+    if lock is None:
+        return False
+    return lock.locked()
 
 
 _MAX_DESCRIPTION_CHARS = 12_000
@@ -294,57 +308,135 @@ def _score_jobs_for_run_impl(run_id: int) -> None:
             run_row.llm_compare_done = 0
 
     response_format = _match_response_format()
-    done_ct = 0
+    success_ct = 0
     cancelled = False
+    failed_snapshots: list[JobScoringSnapshot] = []
     run_cancel.register(run_id)
-    try:
-        for job in snapshots:
-            if run_cancel.is_cancelled(run_id):
-                cancelled = True
-                break
+
+    def _cancel_check() -> bool:
+        return run_cancel.is_cancelled(run_id)
+
+    def _score_one(job: JobScoringSnapshot, *, pass_label: str) -> bool:
+        """Score one job and persist. Returns True on success, False on any failure.
+
+        Raises :class:`LlmRequestCancelled` (untouched) when the provider's cancel
+        callback fires mid-call, so the outer loop can transition to the cancelled
+        branch immediately instead of treating it as a retryable failure.
+
+        ``had_successful_llm_response`` and ``digest_payload`` are mutated via closure.
+        """
+        nonlocal had_successful_llm_response
+        try:
+            blob = format_job_blob(job)
+            user_msg = _USER_TEMPLATE.format(ideal=ideal_text, job_blob=blob)
+            messages = [
+                {"role": "system", "content": llm_system_prompt},
+                {"role": "user", "content": user_msg},
+            ]
             try:
-                blob = format_job_blob(job)
-                user_msg = _USER_TEMPLATE.format(ideal=ideal_text, job_blob=blob)
-                messages = [
-                    {"role": "system", "content": llm_system_prompt},
-                    {"role": "user", "content": user_msg},
-                ]
-                try:
-                    raw = provider.chat_completion(messages, response_format=response_format)
-                    score, reasoning = _parse_score_response(raw)
-                    had_successful_llm_response = True
-                except Exception as e:
-                    logger.warning(
-                        "LLM scoring failed job_id=%s (provider=%s): %s",
-                        job.job_id,
-                        provider.id,
-                        e,
-                        exc_info=True,
-                    )
-                    continue
-                try:
-                    with session_scope_llm() as llm_session:
-                        _upsert_score(llm_session, job.job_id, score, reasoning)
-                except Exception as e:
-                    logger.warning("persist LLM score failed job_id=%s: %s", job.job_id, e, exc_info=True)
-                    continue
-                if notify_to and score >= notify_thr:
-                    digest_payload.append(
-                        {
-                            "job_id": job.job_id,
-                            "title": job.title or "",
-                            "company": job.company or "",
-                            "place": job.place or "",
-                            "location": job.location or "",
-                            "link": job.link or "",
-                            "apply_link": job.apply_link or "",
-                            "score": str(score),
-                            "reasoning": reasoning,
-                        }
-                    )
-            finally:
-                done_ct += 1
-                _persist_llm_compare_done(run_id, done_ct)
+                raw = provider.chat_completion(
+                    messages,
+                    response_format=response_format,
+                    cancel_check=_cancel_check,
+                )
+                score, reasoning = _parse_score_response(raw)
+                had_successful_llm_response = True
+            except LlmRequestCancelled:
+                # Surface cancellation as-is; do not log this as a "scoring failure"
+                # and do not let it count toward the retry pass.
+                raise
+            except Exception as e:
+                logger.warning(
+                    "LLM scoring failed job_id=%s pass=%s (provider=%s): %s",
+                    job.job_id,
+                    pass_label,
+                    provider.id,
+                    e,
+                    exc_info=True,
+                )
+                return False
+            try:
+                with session_scope_llm() as llm_session:
+                    _upsert_score(llm_session, job.job_id, score, reasoning)
+            except Exception as e:
+                logger.warning(
+                    "persist LLM score failed job_id=%s pass=%s: %s",
+                    job.job_id,
+                    pass_label,
+                    e,
+                    exc_info=True,
+                )
+                return False
+            if notify_to and score >= notify_thr:
+                digest_payload.append(
+                    {
+                        "job_id": job.job_id,
+                        "title": job.title or "",
+                        "company": job.company or "",
+                        "place": job.place or "",
+                        "location": job.location or "",
+                        "link": job.link or "",
+                        "apply_link": job.apply_link or "",
+                        "score": str(score),
+                        "reasoning": reasoning,
+                    }
+                )
+            return True
+        except LlmRequestCancelled:
+            # Cooperative cancel: bubble up so the outer loop can break and skip retry.
+            raise
+        except Exception:
+            logger.exception(
+                "unexpected scoring error job_id=%s pass=%s", job.job_id, pass_label
+            )
+            return False
+
+    try:
+        # Main pass: try every snapshot once. Collect failures for a retry pass.
+        try:
+            for job in snapshots:
+                if run_cancel.is_cancelled(run_id):
+                    cancelled = True
+                    break
+                if _score_one(job, pass_label="main"):
+                    success_ct += 1
+                    _persist_llm_compare_done(run_id, success_ct)
+                else:
+                    failed_snapshots.append(job)
+        except LlmRequestCancelled:
+            # Provider observed cancel mid-call: skip retry, transition to cancelled.
+            cancelled = True
+
+        # Single retry pass for jobs that failed in the main pass. Each retry call still
+        # benefits from the provider's own internal retry/backoff (see GeminiProvider).
+        if failed_snapshots and not cancelled:
+            retry_targets = list(failed_snapshots)
+            failed_snapshots.clear()
+            logger.info(
+                "Retrying %d failed job(s) for run_id=%s",
+                len(retry_targets),
+                run_id,
+            )
+            try:
+                for job in retry_targets:
+                    if run_cancel.is_cancelled(run_id):
+                        cancelled = True
+                        break
+                    if _score_one(job, pass_label="retry"):
+                        success_ct += 1
+                        _persist_llm_compare_done(run_id, success_ct)
+                    else:
+                        failed_snapshots.append(job)
+            except LlmRequestCancelled:
+                cancelled = True
+
+            if failed_snapshots and not cancelled:
+                logger.warning(
+                    "LLM scoring permanently failed for %d job(s) in run_id=%s after retry: %s",
+                    len(failed_snapshots),
+                    run_id,
+                    [j.job_id for j in failed_snapshots],
+                )
     finally:
         run_cancel.discard(run_id)
         try:
@@ -358,7 +450,12 @@ def _score_jobs_for_run_impl(run_id: int) -> None:
             )
 
     if cancelled:
-        logger.info("LLM scoring cancelled by user run_id=%s after %d/%d", run_id, done_ct, len(snapshots))
+        logger.info(
+            "LLM scoring cancelled by user run_id=%s after %d/%d",
+            run_id,
+            success_ct,
+            len(snapshots),
+        )
         with session_scope() as session:
             run_row = session.get(ScrapeRun, run_id)
             if run_row is not None:

@@ -49,7 +49,10 @@ from app.services.schedule_day_status import (
     slots_hm_from_schedule_audit,
 )
 from app.services import run_cancel
-from app.services.job_match_scoring import start_score_jobs_for_run_background
+from app.services.job_match_scoring import (
+    is_scoring_active,
+    start_score_jobs_for_run_background,
+)
 from app.services.scrape_runner import start_scrape_if_idle_for_filter
 from app.templating import templates
 
@@ -496,21 +499,16 @@ def run_rescore(run_id: int, db: Session = Depends(get_db)):
 def _run_is_active(run: ScrapeRun) -> bool:
     """True while the scrape phase or LLM scoring is still working on this run.
 
-    A run that finished — successfully, by failure, or by user cancellation — is not
-    active even if scoring stopped before reaching ``llm_compare_total``. That lets
-    the Rescore button stay enabled on a cancelled run so the user can resume
-    scoring on the partial capture.
+    Two sources are considered live:
+    * ``run.status == 'running'`` — the scrape phase. Scoring won't have started yet.
+    * ``is_scoring_active(run.id)`` — a per-run lock held only while the scoring
+      worker is executing, regardless of the persisted ``status`` (so a Rescore
+      on a previously cancelled/failed run is also detected, and a finished
+      run with permanent failures is correctly reported as not active).
     """
     if run.status == "running":
         return True
-    if run.status == "success":
-        total = run.llm_compare_total
-        if total is not None and total > 0 and run.llm_compare_done < total:
-            return True
-    # A live worker (e.g. Rescore on a previously cancelled/failed run) is also
-    # "active" even though the persisted status no longer says running. Without this
-    # the Stop button would be hidden while a Rescore worker is actually scoring.
-    if run_cancel.has_worker(run.id):
+    if is_scoring_active(run.id):
         return True
     return False
 
@@ -756,7 +754,11 @@ def run_status_partial(request: Request, run_id: int, db: Session = Depends(get_
     return templates.TemplateResponse(
         request,
         "partials/run_status_inner.html",
-        {"run": run, "cancel_pending": run_cancel.is_cancelled(run_id)},
+        {
+            "run": run,
+            "cancel_pending": run_cancel.is_cancelled(run_id),
+            "is_active": _run_is_active(run),
+        },
         headers={"Cache-Control": "no-store"},
     )
 

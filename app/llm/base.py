@@ -3,8 +3,21 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
+
+
+class LlmRequestCancelled(Exception):
+    """Raised by a provider's ``chat_completion`` when the optional ``cancel_check``
+    callback returns ``True`` between retry attempts.
+
+    The scoring loop catches this and treats it as a cooperative cancellation —
+    the job is **not** retried, and the run transitions to the cancelled branch.
+    """
+
+
+CancelCheck = Callable[[], bool]
 
 
 @dataclass(frozen=True)
@@ -99,8 +112,15 @@ class LlmProvider(ABC):
         *,
         response_format: dict[str, Any],
         temperature: float = 0.2,
+        cancel_check: CancelCheck | None = None,
     ) -> str:
-        """Send a chat completion request and return the assistant message content."""
+        """Send a chat completion request and return the assistant message content.
+
+        When ``cancel_check`` is supplied, providers that loop over retries should
+        invoke it between attempts and raise :class:`LlmRequestCancelled` as soon as
+        it returns ``True``, so a user clicking Stop doesn't have to wait for the
+        full retry budget to drain.
+        """
 
     def before_inference(self) -> None:
         """Optional setup before the first chat completion (e.g. start a local server)."""

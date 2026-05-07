@@ -29,7 +29,8 @@
   <p class="run-progress-meta muted">Scored {{ run.llm_compare_done }} / {{ run.llm_compare_total }} listing{% if run.llm_compare_total != 1 %}s{% endif %} — stopped.</p>
   {% else %}
   <progress class="run-progress-bar" max="{{ run.llm_compare_total }}" value="{% if run.llm_compare_done < run.llm_compare_total %}{{ run.llm_compare_done }}{% else %}{{ run.llm_compare_total }}{% endif %}"></progress>
-  <p class="run-progress-meta muted">Scored {{ run.llm_compare_done }} / {{ run.llm_compare_total }} listing{% if run.llm_compare_total != 1 %}s{% endif %}{% if run.llm_compare_done >= run.llm_compare_total %} — done{% else %} — in progress{% endif %}.</p>
+  {% set missing = run.llm_compare_total - run.llm_compare_done %}
+  <p class="run-progress-meta muted">Scored {{ run.llm_compare_done }} / {{ run.llm_compare_total }} listing{% if run.llm_compare_total != 1 %}s{% endif %}{% if run.llm_compare_done >= run.llm_compare_total %} — done{% elif is_active %} — in progress{% else %} — done; {{ missing }} could not be scored after retry{% endif %}.</p>
   {% endif %}
 </div>
 {% elif effective_status == 'failed' %}

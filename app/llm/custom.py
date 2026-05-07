@@ -8,7 +8,7 @@ from typing import Any, ClassVar
 import httpx
 
 from app.config import custom_llm_api_key
-from app.llm.base import LlmProvider
+from app.llm.base import CancelCheck, LlmProvider
 from app.llm_prefs import PROVIDER_CUSTOM, get_provider_block
 
 _logger = logging.getLogger(__name__)
@@ -45,7 +45,11 @@ class CustomProvider(LlmProvider):
         *,
         response_format: dict[str, Any],
         temperature: float = 0.2,
+        cancel_check: CancelCheck | None = None,
     ) -> str:
+        # ``cancel_check`` is accepted for interface parity. This provider has no
+        # internal retry loop, so caller-side cancellation between jobs is enough.
+        del cancel_check  # noqa: F841 - declared for interface parity
         url_base = self.base_url()
         if not url_base:
             raise RuntimeError("Custom endpoint base URL is not set")
