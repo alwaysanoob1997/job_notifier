@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Filter · LinkedIn Jobs{% endblock %}
+{% block content %}
+<div class="filter-detail-header">
+  <div class="filter-detail-header-main">
+    <p class="filter-detail-back"><a class="btn-secondary" href="/">&larr; All filters</a></p>
+    <h1 class="filter-detail-title">{{ (filter.name or filter.job_title or 'Untitled filter')|e }}</h1>
+  </div>
+  <a class="filter-card-delete filter-detail-delete" href="{{ url_for('filter_delete_confirm', filter_id=filter.id) }}" aria-label="Delete filter">
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+  </a>
+</div>
+<p class="muted">Searches use about the last day of listings, up to 100 results, newest first.</p>
+
+<form method="post" action="{{ url_for('save_filter', filter_id=filter.id) }}" id="filter-save-form" class="filter-save-form" data-max-slots="{{ max_schedule_slots }}">
+  <input type="hidden" name="save_kind" id="save-kind-input" value="search" />
+  <section class="card">
+    <h2>Search</h2>
+    <label>Display name <input name="name" type="text" value="{{ filter.name }}" placeholder="e.g. Campus TA" /></label>
+    <label>Job title <input name="job_title" type="text" value="{{ filter.job_title }}" placeholder="e.g. Talent Acquisition" /></label>
+    <label>Location <input name="location" type="text" value="{{ filter.location }}" placeholder="e.g. Bengaluru" required /></label>
+    <p class="filter-save-actions" style="margin-top: 1rem;">
+      <button type="submit" class="btn-primary" id="filter-save-search-btn">Save</button>
+    </p>
+    <p class="muted small" style="margin-top: 0.5rem;"><strong>Save</strong> only updates the fields above. To change automatic runs, use <strong>Save schedule</strong> below.</p>
+  </section>
+
+  <section class="card schedule-runs-card">
+    <h2>Scheduled runs</h2>
+    {% if not has_schedule %}
+    <p class="schedule-current-status" id="schedule-current-status">{{ schedule_blurb|e }}</p>
+    {% endif %}
+    <p class="muted small">Times follow the time zone in Settings (or your computer if none is set). You can always start a search yourself under <strong>Manual run</strong> below.</p>
+
+    {% if not has_schedule %}
+    <p class="schedule-primary-actions filter-save-actions" style="margin-top: 1rem;">
+      <button type="button" class="btn-primary schedule-add-schedule-btn" id="schedule-add-btn">Add schedule</button>
+    </p>
+    {% else %}
+    <div class="schedule-active-panel">
+      <div class="schedule-active-table-wrap">
+        <table class="data-table schedule-active-table">
+          <caption class="schedule-active-caption">When it runs</caption>
+          <thead>
+            <tr>
+              <th scope="col">Run</th>
+              <th scope="col">Local time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in schedule_slot_strings %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td><code>{{ t|e }}</code></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="schedule-active-actions" role="group" aria-label="Schedule actions">
+        <button type="button" class="schedule-icon-btn schedule-icon-btn--edit" id="schedule-edit-btn" title="Edit schedule" aria-label="Edit schedule">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button type="submit" class="schedule-icon-btn schedule-icon-btn--delete" id="schedule-delete-btn" form="schedule-delete-form" title="Delete schedule" aria-label="Delete schedule">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        </button>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="schedule-editor" id="schedule-editor" hidden>
+      <div class="schedule-toolbar">
+        <button type="button" class="btn-secondary schedule-add-time-btn" id="add-schedule-slot" hidden>Add time</button>
+        <div class="schedule-preset-field">
+          <label class="schedule-preset-label" for="even-spacing-preset">Schedule</label>
+          <select id="even-spacing-preset" aria-label="Schedule: none, custom, or even-spacing preset">
+            <option value="__none__" {% if not schedule_slot_strings %}selected{% endif %}>No schedule</option>
+            <option value="__custom__" {% if schedule_slot_strings and not initial_schedule_preset %}selected{% endif %}>Custom</option>
+            {% for n, label in schedule_options %}
+            <option value="{{ n }}" {% if initial_schedule_preset == (n ~ '') %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <p class="muted small schedule-slots-hint">Up to {{ max_schedule_slots }} runs per day. Set a time for each.</p>
+
+      <div class="schedule-slots" id="schedule-slots" data-max-slots="{{ max_schedule_slots }}">
+        {% for t in schedule_slot_strings %}
+        <div class="schedule-slot-row" data-initial-time="{{ t|e }}">
+          <div class="schedule-time-field">
+            <span class="schedule-time-label-text">Local time</span>
+            <div class="schedule-time-picks" role="group" aria-label="Run time (local)">
+              <select class="schedule-hour-select" aria-label="Hour (local)"></select>
+              <span class="schedule-time-colon" aria-hidden="true">:</span>
+              <select class="schedule-minute-select" aria-label="Minute (local)"></select>
+            </div>
+          </div>
+          <button type="button" class="btn-secondary schedule-slot-remove">Remove</button>
+        </div>
+        {% endfor %}
+      </div>
+
+      <input type="hidden" name="schedule_payload" id="schedule-payload" value='{{ schedule_slots_json }}' />
+
+      <p class="schedule-save-schedule-actions">
+        <button type="submit" class="btn-primary" id="filter-save-schedule-btn">Save schedule</button>
+      </p>
+    </div>
+  </section>
+</form>
+
+<form id="schedule-delete-form" method="post" action="{{ url_for('delete_filter_schedule', filter_id=filter.id) }}" class="schedule-delete-form-hidden" onsubmit="return confirm('Remove the automated schedule for this filter?');"></form>
+
+<template id="schedule-slot-template">
+  <div class="schedule-slot-row">
+    <div class="schedule-time-field">
+      <span class="schedule-time-label-text">Local time</span>
+      <div class="schedule-time-picks" role="group" aria-label="Run time (local)">
+        <select class="schedule-hour-select" aria-label="Hour (local)"></select>
+        <span class="schedule-time-colon" aria-hidden="true">:</span>
+        <select class="schedule-minute-select" aria-label="Minute (local)"></select>
+      </div>
+    </div>
+    <button type="button" class="btn-secondary schedule-slot-remove">Remove</button>
+  </div>
+</template>
+
+<script type="application/json" id="even-presets-data">{{ even_presets_json|safe }}</script>
+
+<section class="card">
+  <h2>Manual run</h2>
+  <div id="run-msg"></div>
+  <form method="post" action="{{ url_for('start_run_for_filter', filter_id=filter.id) }}" hx-post="{{ url_for('start_run_for_filter', filter_id=filter.id) }}" hx-target="#run-msg" hx-swap="innerHTML">
+    <button type="submit" class="btn-primary">Run scraper now</button>
+  </form>
+  <p class="muted small">You need a job title saved above. Only one search runs at a time.</p>
+</section>
+
+{% endblock %}

@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}Settings · LinkedIn Jobs{% endblock %}
+{% block content %}
+<p><a class="btn-secondary" href="/">&larr; Home</a></p>
+<h1>Settings</h1>
+
+<details class="card ideal-job-shell" id="system-prompt-shell" {% if open_system_prompt_editor %}open{% endif %}>
+  <summary class="ideal-job-summary">
+    <span class="ideal-job-summary-inner">
+      <span class="ideal-job-summary-title">System prompt</span>
+      <span class="muted small ideal-job-summary-lead">Instructions the app uses when scoring jobs. Only your latest save is used.</span>
+      {% if system_prompt_using_builtin %}
+      <span class="muted small ideal-job-summary-meta">Using built-in default.</span>
+      {% else %}
+      <span class="muted small ideal-job-summary-meta">Active version #{{ system_prompt_active_id }}, last saved {{ system_prompt_active_at|format_dt }}.</span>
+      {% endif %}
+      <span class="muted small ideal-job-summary-hint">Click to add or edit</span>
+      <span class="system-prompt-summary-actions" onclick="event.stopPropagation();">
+        <button type="button" class="schedule-icon-btn schedule-icon-btn--edit" title="Open editor" aria-label="Open editor" onclick="(function(){var d=document.getElementById('system-prompt-shell');if(d){d.open=true;}})();">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+      </span>
+    </span>
+  </summary>
+  {% if system_prompt_error == "blank" %}
+  <p class="error-inline" role="alert">System prompt cannot be empty.</p>
+  {% endif %}
+  <form method="post" action="/settings/system-prompt" class="ideal-job-editor" id="system-prompt-editor">
+    <label for="system-prompt-text">Prompt</label>
+    <textarea id="system-prompt-text" name="prompt" rows="14" required>{{ system_prompt_editor_value }}</textarea>
+    <p class="ideal-job-editor-actions">
+      <button type="button" class="btn-secondary" id="system-prompt-cancel">Cancel</button>
+      <button type="submit" class="btn-primary">Save prompt</button>
+    </p>
+  </form>
+  <form method="post" action="/settings/system-prompt/reset" class="ideal-job-editor system-prompt-reset-form" onsubmit="return confirm('Reset to the built-in default? All saved prompt versions will be removed.');">
+    <p class="muted small">Go back to the app’s built-in instructions and discard your custom versions.</p>
+    <button type="submit" class="btn-secondary">Reset to default</button>
+  </form>
+</details>
+
+<section class="card" id="user-config-card" aria-labelledby="user-config-heading">
+  <h2 id="user-config-heading">Config</h2>
+  <p class="muted">These options are saved for this app on your computer. Other advanced settings you change by hand are left as-is.</p>
+  {% if config_saved %}
+  <p class="lmstudio-settings-msg muted" role="status">Config saved.</p>
+  {% endif %}
+  {% if config_error == "catchup" %}
+  <p class="error-inline" role="alert">Catch-up gap must be a whole number of seconds.</p>
+  {% elif config_error == "port" %}
+  <p class="error-inline" role="alert">SMTP port must be between 1 and 65535.</p>
+  {% elif config_error == "lms_port" %}
+  <p class="error-inline" role="alert">LM Studio server port must be a number from 1 to 65535.</p>
+  {% endif %}
+  <form method="post" action="/settings/config" class="user-config-form">
+    <fieldset class="config-subsection">
+      <legend>Scheduling</legend>
+      <p class="muted small-hint">When the app catches up on missed scrape slots and which time zone schedule times are interpreted in.</p>
+      <label>Catch-up min gap (seconds)
+        <input name="APP_SCHEDULE_CATCHUP_MIN_GAP_SEC" type="number" min="0" step="1" value="{{ config_values['APP_SCHEDULE_CATCHUP_MIN_GAP_SEC'] }}" />
+      </label>
+      <label>Time zone for schedules (e.g. America/New_York)
+        <input name="APP_SCHEDULE_STATUS_TZ" type="text" value="{{ config_values['APP_SCHEDULE_STATUS_TZ'] }}" placeholder="optional" autocomplete="off" />
+      </label>
+    </fieldset>
+
+    <fieldset class="config-subsection">
+      <legend>Email (SMTP)</legend>
+      <p class="muted small-hint">Used to email scoring summaries. Leave blank to disable email notifications.</p>
+      <label>SMTP host
+        <input name="APP_SMTP_HOST" type="text" value="{{ config_values['APP_SMTP_HOST'] }}" placeholder="optional" autocomplete="off" />
+      </label>
+      <label>SMTP port
+        <input name="APP_SMTP_PORT" type="number" min="1" max="65535" step="1" value="{{ config_values['APP_SMTP_PORT'] }}" />
+      </label>
+      <label>SMTP email (username)
+        <input name="APP_SMTP_USER" type="text" value="{{ config_values['APP_SMTP_USER'] }}" placeholder="optional" autocomplete="username" />
+      </label>
+      <label>SMTP email (from address)
+        <input name="APP_SMTP_FROM" type="text" value="{{ config_values['APP_SMTP_FROM'] }}" placeholder="optional" autocomplete="email" />
+      </label>
+      <label>SMTP password
+        <input name="APP_SMTP_PASSWORD" type="password" value="" placeholder="{% if secrets_set['APP_SMTP_PASSWORD'] %}Leave blank to keep current password{% else %}Required to send mail{% endif %}" autocomplete="current-password" />
+      </label>
+    </fieldset>
+
+    <fieldset class="config-subsection">
+      <legend>LM Studio</legend>
+      <p class="muted small-hint">Local LLM runtime settings. Used when LM Studio is the active provider in the panel below.</p>
+      <label>LM Studio CLI command
+        <input name="APP_LMS_CLI" type="text" value="{{ config_values['APP_LMS_CLI'] }}" placeholder="lms" autocomplete="off" />
+      </label>
+      <label>LM Studio auto-start server before scoring
+        {% set lms_auto = (config_values['APP_LMS_AUTO_START_SERVER'] or '1')|lower %}
+        <select name="APP_LMS_AUTO_START_SERVER" aria-describedby="hint-lms-auto-start">
+          <option value="0" {% if lms_auto not in ['1', 'true', 'yes', 'on'] %}selected{% endif %}>Off (0)</option>
+          <option value="1" {% if lms_auto in ['1', 'true', 'yes', 'on'] %}selected{% endif %}>On (1)</option>
+        </select>
+      </label>
+      <p id="hint-lms-auto-start" class="muted small-hint">When on, the app starts the LM Studio server before scoring jobs.</p>
+      <label>LM Studio server address
+        <input name="APP_LMS_SERVER_BIND" type="text" value="{{ config_values['APP_LMS_SERVER_BIND'] }}" placeholder="0.0.0.0" autocomplete="off" />
+      </label>
+      <label>LM Studio server port
+        <input name="APP_LMS_SERVER_PORT" type="number" min="1" max="65535" step="1" value="{{ config_values['APP_LMS_SERVER_PORT'] }}" />
+      </label>
+    </fieldset>
+
+    <fieldset class="config-subsection">
+      <legend>API keys</legend>
+      <p class="muted small-hint">Stored only on this computer. Pair with the matching provider in the LLM provider panel below. Leave blank to keep an existing key.</p>
+      <label>Google Gemini API key
+        <input name="APP_GEMINI_API_KEY" type="password" value="" placeholder="{% if secrets_set['APP_GEMINI_API_KEY'] %}Leave blank to keep current key{% else %}Get one at https://aistudio.google.com/apikey{% endif %}" autocomplete="off" />
+      </label>
+      <label>Custom endpoint API key
+        <input name="APP_LLM_CUSTOM_API_KEY" type="password" value="" placeholder="{% if secrets_set['APP_LLM_CUSTOM_API_KEY'] %}Leave blank to keep current key{% else %}Optional — needed only when your custom endpoint requires auth{% endif %}" autocomplete="off" />
+      </label>
+    </fieldset>
+
+    <p class="user-config-actions">
+      <button type="submit" class="btn-primary">Save config</button>
+    </p>
+  </form>
+  <form method="post" action="/settings/config/reset" class="user-config-reset-form" onsubmit="return confirm('Reset these fields to defaults? Your saved email password for sending mail will be cleared.');">
+    <button type="submit" class="btn-secondary">Reset config to defaults</button>
+  </form>
+</section>
+
+<section class="card" id="llm-provider-card" aria-labelledby="llm-provider-heading">
+  <h2 id="llm-provider-heading">LLM provider</h2>
+  <p class="muted">Pick which AI service scores job listings. Your choice is remembered on this computer; API keys live in the Config form above.</p>
+  <p id="llm-provider-status" class="muted small-hint" role="status"></p>
+  <p id="llm-provider-error" class="error-inline" hidden></p>
+
+  <label>Provider
+    <select id="llm-provider-select" aria-describedby="llm-provider-hint">
+      <option value="lmstudio">LM Studio (local)</option>
+      <option value="gemini">Google Gemini</option>
+      <option value="custom">Custom endpoint</option>
+    </select>
+  </label>
+  <p id="llm-provider-hint" class="muted small-hint">Only one provider is active at a time. Switching providers does not delete the others' settings.</p>
+
+  <div class="llm-provider-panel" id="llm-panel-lmstudio" data-provider="lmstudio" hidden>
+    <div class="llm-model-filters" data-provider="lmstudio"></div>
+    <label>Preferred model
+      <select id="llm-lmstudio-model" aria-describedby="llm-lmstudio-hint"></select>
+    </label>
+    <p id="llm-lmstudio-hint" class="muted small-hint">Download models in LM Studio first, then refresh the list.</p>
+    <p id="llm-lmstudio-unavailable" class="muted small-hint" hidden></p>
+    <div class="llm-settings-actions">
+      <button type="button" class="btn-secondary" id="llm-lmstudio-refresh">Refresh model list</button>
+      <button type="button" class="btn-primary" id="llm-lmstudio-save">Save</button>
+    </div>
+  </div>
+
+  <div class="llm-provider-panel" id="llm-panel-gemini" data-provider="gemini" hidden>
+    <div class="llm-model-filters" data-provider="gemini"></div>
+    <label>Model
+      <select id="llm-gemini-model" aria-describedby="llm-gemini-hint"></select>
+    </label>
+    <p id="llm-gemini-hint" class="muted small-hint">Set your Google Gemini API key in the Config form above, then refresh to load the model list. Per-model quotas follow Gemini's <a href="https://ai.google.dev/gemini-api/docs/rate-limits" target="_blank" rel="noopener">rate limits</a>; tune <code>APP_GEMINI_RPM</code> if your tier allows higher than 15 requests/min.</p>
+    <p id="llm-gemini-models-error" class="muted small-hint" hidden></p>
+    <div class="llm-settings-actions">
+      <button type="button" class="btn-secondary" id="llm-gemini-refresh">Refresh model list</button>
+      <button type="button" class="btn-primary" id="llm-gemini-save">Save</button>
+    </div>
+  </div>
+
+  <div class="llm-provider-panel" id="llm-panel-custom" data-provider="custom" hidden>
+    <label>Base URL
+      <input type="text" id="llm-custom-base-url" placeholder="http://192.168.1.10:8080/v1" autocomplete="off" />
+    </label>
+    <label>Model id
+      <input type="text" id="llm-custom-model" placeholder="e.g. meta-llama/Llama-3.1-8B-Instruct" autocomplete="off" />
+    </label>
+    <p class="muted small-hint">The endpoint must speak the OpenAI <code>/chat/completions</code> protocol. If it requires a bearer token, set the "Custom endpoint API key" in the Config form above.</p>
+    <div class="llm-settings-actions">
+      <button type="button" class="btn-primary" id="llm-custom-save">Save</button>
+    </div>
+  </div>
+</section>
+
+<h2 class="settings-subheading">Browser paths</h2>
+<p class="muted">Optional Chrome paths if the app can’t find the browser on its own.</p>
+
+<form method="post" action="/settings/advanced" class="card">
+  <label>ChromeDriver path <input name="chrome_executable_path" type="text" value="{{ (settings.chrome_executable_path or '') if settings else '' }}" placeholder="optional" /></label>
+  <label>Chrome binary path <input name="chrome_binary_location" type="text" value="{{ (settings.chrome_binary_location or '') if settings else '' }}" placeholder="optional" /></label>
+  <button type="submit" class="btn-primary">Save browser paths</button>
+</form>
+{% endblock %}

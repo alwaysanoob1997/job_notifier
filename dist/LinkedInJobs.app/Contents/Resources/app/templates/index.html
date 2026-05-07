@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Filters · LinkedIn Jobs{% endblock %}
+{% block content %}
+<h1>Your filters</h1>
+<p class="muted">Each card is a saved job search. Open one to run it or set when it runs automatically.</p>
+
+<details class="card ideal-job-shell" id="ideal-job-shell">
+  <summary class="ideal-job-summary">
+    <span class="ideal-job-summary-inner">
+      <span class="ideal-job-summary-title">Ideal job requirements</span>
+      <span class="muted small ideal-job-summary-lead">Describe your ideal role. Only your latest save is used to score new listings.</span>
+      {% if ideal_job_active_id is not none %}
+      <span class="muted small ideal-job-summary-meta">Active version #{{ ideal_job_active_id }}, last saved {{ ideal_job_active_at|format_dt }}.</span>
+      {% endif %}
+      {% if ideal_job_description %}
+      <span class="ideal-job-preview" id="ideal-job-preview">{{ ideal_job_description }}</span>
+      {% else %}
+      <span class="ideal-job-preview ideal-job-preview--empty" id="ideal-job-preview">No requirements saved yet.</span>
+      {% endif %}
+      <span class="muted small ideal-job-summary-hint">Click to add or edit</span>
+    </span>
+  </summary>
+  <form method="post" action="{{ url_for('save_ideal_job_requirements') }}" class="ideal-job-editor" id="ideal-job-editor">
+    <label for="ideal-job-description">Requirements</label>
+    <textarea id="ideal-job-description" name="description" rows="8" placeholder="e.g. Remote-friendly senior backend role, Python, small team…">{{ ideal_job_description }}</textarea>
+    <label for="ideal-job-notify-threshold">Notify me for scores ≥ (0–100)</label>
+    <input type="number" id="ideal-job-notify-threshold" name="notify_threshold" min="0" max="100" step="1" value="{{ ideal_job_notify_threshold }}" data-initial-threshold="{{ ideal_job_notify_threshold }}" />
+    <label for="ideal-job-notify-email">Alert email (optional)</label>
+    <input type="email" id="ideal-job-notify-email" name="notify_email" maxlength="512" value="{{ ideal_job_notify_email }}" placeholder="Leave empty to disable email alerts" autocomplete="email" data-initial-email="{{ ideal_job_notify_email }}" />
+    <p class="ideal-job-editor-actions">
+      <button type="button" class="btn-secondary" id="ideal-job-cancel">Cancel</button>
+      <button type="submit" class="btn-primary">Save requirements</button>
+    </p>
+  </form>
+</details>
+
+<div class="filter-cards">
+  {% for f in filters %}
+  <div class="filter-card-shell">
+    <a class="filter-card" href="{{ url_for('filter_detail', filter_id=f.id) }}">
+      <h2 class="filter-card-title">{{ (f.name or f.job_title or 'Untitled filter')|e }}</h2>
+      <p class="filter-card-sub muted">{{ f.job_title or '—' }} · {{ f.location }}</p>
+      <p class="filter-card-meta small muted">{{ schedule_blurbs[f.id] }}</p>
+    </a>
+    <a class="filter-card-delete" href="{{ url_for('filter_delete_confirm', filter_id=f.id) }}" aria-label="Delete filter">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+    </a>
+  </div>
+  {% endfor %}
+</div>
+
+<form method="post" action="{{ url_for('create_filter') }}" class="card add-filter-form">
+  <button type="submit" class="btn-primary">Add filter</button>
+</form>
+{% endblock %}

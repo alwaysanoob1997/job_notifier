@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Delete filter · LinkedIn Jobs{% endblock %}
+{% block content %}
+<p><a class="btn-secondary" href="{{ url_for('filter_detail', filter_id=ctx.filter.id) }}">&larr; Back to filter</a></p>
+<h1>Delete this filter?</h1>
+<p class="muted">{{ (ctx.filter.name or ctx.filter.job_title or 'Untitled filter')|e }}</p>
+
+{% if blocked_running %}
+<p class="error">A scrape is still running for this filter. Wait for it to finish, then try again.</p>
+{% endif %}
+
+<ul class="slots">
+  <li>Removes <strong>{{ ctx.daily_slot_count }}</strong> automatic run time(s) for this search.</li>
+  {% if ctx.schedule_audit_count > 0 %}
+  <li>Removes <strong>{{ ctx.schedule_audit_count }}</strong> entr{{ 'y' if ctx.schedule_audit_count == 1 else 'ies' }} from <a class="btn-secondary btn-compact" href="/schedules">Schedule history</a> for this search.</li>
+  {% endif %}
+  {% if ctx.scrape_run_count > 0 %}
+  <li>Keeps <strong>{{ ctx.scrape_run_count }}</strong> past run(s) under <a class="btn-secondary btn-compact" href="/runs">Past runs</a>, but they won’t be tied to this search anymore.</li>
+  {% endif %}
+</ul>
+
+{% if warn_schedules %}
+<div class="callout-warn" role="status">
+  <strong>Heads up</strong>
+  This search has automatic runs, history, or saved details. Deleting it stops future scheduled runs and clears related history as described above.
+</div>
+{% endif %}
+
+<form method="post" action="{{ url_for('filter_delete_execute', filter_id=ctx.filter.id) }}" class="card filter-danger-zone" style="margin-top: 1.25rem;">
+  <p class="filter-save-actions" style="margin: 0; display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center;">
+    <button type="submit" class="btn-danger">Delete filter permanently</button>
+    <a href="{{ url_for('filter_detail', filter_id=ctx.filter.id) }}" class="btn-secondary">Cancel</a>
+  </p>
+</form>
+{% endblock %}

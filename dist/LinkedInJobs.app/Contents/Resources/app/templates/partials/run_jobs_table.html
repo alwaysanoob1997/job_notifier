@@ -1,0 +1,93 @@
+{#
+  Re-renders the toolbar + new-jobs table for one run.
+  The wrapper element is swapped via htmx (outerHTML) so that the polling
+  attribute itself disappears once the run finishes scraping and scoring.
+#}
+<div
+  class="run-jobs-region{% if new_jobs %} table-wrap job-grid-wrap{% endif %}"
+  id="run-jobs-table-wrap"
+  {% if is_active %}
+  hx-get="{{ url_for('run_jobs_partial', run_id=run.id) }}"
+  hx-trigger="every 2s"
+  hx-swap="outerHTML"
+  {% endif %}>
+  <div class="table-toolbar job-table-toolbar">
+    <form method="post" action="{{ url_for('run_rescore', run_id=run.id) }}" class="run-rescore-form">
+      <button
+        type="submit"
+        class="btn-secondary"
+        {% if is_active %}disabled aria-disabled="true"{% endif %}
+        title="{% if is_active %}Wait until the current step finishes{% else %}Score all new listings in this run again{% endif %}"
+        onclick="return confirm('Score all new listings in this run again? This replaces existing scores. Uses your current ideal job text from the home page. You may get an email if a score crosses your alert threshold.');">
+        Rescore listings
+      </button>
+    </form>
+    {% if is_active and not cancel_pending %}
+    <form method="post" action="{{ url_for('run_stop', run_id=run.id) }}" class="run-stop-form">
+      <button
+        type="submit"
+        class="btn-secondary btn-stop"
+        title="Stop the in-progress fetching or scoring step"
+        onclick="return confirm('Stop this run? Jobs already fetched will be kept; remaining LLM scoring will be skipped. You can Rescore later.');">
+        Stop run
+      </button>
+    </form>
+    {% elif is_active and cancel_pending %}
+    <span class="muted run-stop-pending" role="status">Stopping…</span>
+    {% endif %}
+    {% if new_jobs %}
+    <button type="button" class="btn-secondary" id="job-meta-toggle" aria-expanded="false" aria-controls="run-jobs-table-wrap">Show row meta</button>
+    <button type="button" class="btn-secondary" data-tsv-export>Export TSV</button>
+    {% endif %}
+  </div>
+  {% if new_jobs %}
+  <div class="table-scroll">
+    <table class="data-table job-results-grid" data-tsv-filename="run-{{ run.id }}-new-jobs">
+      <thead>
+        <tr>
+          <th>Listed</th>
+          <th>Title</th>
+          <th>Company</th>
+          <th>Place</th>
+          <th>Link</th>
+          <th>Salary</th>
+          <th>Score</th>
+          <th class="job-reasoning-col">Reasoning</th>
+          <th class="job-meta-panel">Meta</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for j in new_jobs %}
+        {% set score_row = scores_by_job_id.get(j.job_id) %}
+        <tr>
+          <td>{% if j.date %}{{ j.date }}{% elif j.date_text %}{{ j.date_text }}{% else %}—{% endif %}</td>
+          <td>{{ j.title }}</td>
+          <td>{{ j.company }}</td>
+          <td>{{ j.place }}</td>
+          <td>{% if j.link %}<a class="btn-secondary btn-compact" href="{{ j.link }}" rel="noopener" target="_blank">Listing</a>{% endif %}</td>
+          <td>{% if j.salary %}{{ j.salary }}{% else %}—{% endif %}</td>
+          <td>{% if score_row %}{{ score_row.score }}{% else %}—{% endif %}</td>
+          <td class="job-reasoning-col">{% if score_row %}<span class="job-reasoning-text">{{ score_row.reasoning }}</span>{% else %}—{% endif %}</td>
+          <td class="job-meta-panel">
+            <div class="job-meta-inner">
+              <div><span class="muted">Listing ID</span> {{ j.job_id }}</div>
+              <div><span class="muted">Saved</span> {{ j.created_at|format_dt }}</div>
+              <div><span class="muted">Search</span> {{ j.query }}</div>
+              <div><span class="muted">Location</span> {{ j.location }}</div>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">
+    {% if is_active %}
+    Waiting for the first listing… rows will appear here as the scraper finds them.
+    {% else %}
+    No new listings this time (ones you already had are skipped).
+    {% endif %}
+  </p>
+  {% endif %}
+</div>

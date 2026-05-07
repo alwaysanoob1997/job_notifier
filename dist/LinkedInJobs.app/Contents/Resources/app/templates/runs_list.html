@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Past runs · LinkedIn Jobs{% endblock %}
+{% block content %}
+<p><a class="btn-secondary" href="/">&larr; Home</a></p>
+<h1>Past runs</h1>
+<p class="muted">Each row is one job search the app ran—by hand or on a schedule.</p>
+
+{% if blocked == "running" %}
+<p class="error">That run is still in progress and cannot be deleted. Wait until it finishes, then try again.</p>
+{% endif %}
+{% if deleted == "1" %}
+<p class="muted" role="status">Run deleted.</p>
+{% endif %}
+
+{% if runs %}
+<div class="table-wrap">
+  <div class="table-toolbar">
+    <button type="button" class="btn-secondary" data-tsv-export>Export TSV</button>
+  </div>
+  <div class="table-scroll">
+    <table class="data-table" data-tsv-filename="past-runs">
+      <thead>
+        <tr>
+          <th>Started</th>
+          <th>Run ID</th>
+          <th>Trigger</th>
+          <th>Status</th>
+          <th>Returned</th>
+          <th>New</th>
+          <th>Dup</th>
+          <th>View</th>
+          <th class="col-run-actions" data-tsv-skip data-no-sort aria-label="Delete"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in runs %}
+        <tr>
+          <td>{{ r.started_at|format_dt }}</td>
+          <td>{{ r.id }}</td>
+          <td>{{ r.trigger }}</td>
+          <td><span class="status status-{{ r.status }}">{{ r.status }}</span></td>
+          <td>{{ r.jobs_returned }}</td>
+          <td>{{ r.jobs_new }}</td>
+          <td>{{ r.jobs_duplicate }}</td>
+          <td><a class="btn-secondary btn-compact" href="/runs/{{ r.id }}">Open</a></td>
+          <td class="col-run-actions" data-tsv-skip>
+            <form method="post" action="{{ url_for('run_delete', run_id=r.id) }}" class="run-delete-form">
+              <button
+                type="submit"
+                class="run-table-delete"
+                {% if r.status == "running" %}disabled aria-disabled="true"{% endif %}
+                aria-label="Delete run {{ r.id }}"
+                {% if r.status != "running" %}onclick="return confirm('Delete this run and all jobs that were new in this run? This cannot be undone.');"{% endif %}
+                title="{% if r.status == 'running' %}Cannot delete while the run is in progress{% else %}Delete this run{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<p class="muted">No runs yet.</p>
+{% endif %}
+{% endblock %}

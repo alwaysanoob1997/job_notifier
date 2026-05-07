@@ -1,0 +1,1 @@
+../../../Resources/httptools/parser/url_parser.pyi
